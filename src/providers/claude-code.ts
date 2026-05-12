@@ -60,6 +60,20 @@ function inferredCwdFromClaudeProjectPath(path: string): string | undefined {
     return `${home}/code/${folder.slice(codePrefix.length)}`;
   }
 
+  const t3WorktreePrefix = `-${home.slice(1).replaceAll("/", "-")}--t3-worktrees-`;
+  if (folder.startsWith(t3WorktreePrefix)) {
+    const suffix = folder.slice(t3WorktreePrefix.length);
+    const project = suffix.replace(/-t3code-[0-9a-f]+$/i, "");
+    return `${home}/code/${project}`;
+  }
+
+  const dotT3WorktreePrefix = `-${home.slice(1).replaceAll("/", "-")}-.t3-worktrees-`;
+  if (folder.startsWith(dotT3WorktreePrefix)) {
+    const suffix = folder.slice(dotT3WorktreePrefix.length);
+    const project = suffix.replace(/-t3code-[0-9a-f]+$/i, "");
+    return `${home}/code/${project}`;
+  }
+
   return `/${folder.slice(1).replaceAll("-", "/")}`;
 }
 
@@ -77,7 +91,11 @@ export const claudeCodeProvider: ProviderAdapter = {
       idField: "sessionId",
       cwdField: "cwd",
     });
-    conversation.metadata.cwd ??= inferredCwdFromClaudeProjectPath(ref.path);
+    const inferredCwd = inferredCwdFromClaudeProjectPath(ref.path);
+    conversation.metadata.cwd ??= inferredCwd;
+    if (inferredCwd && conversation.metadata.cwd !== inferredCwd) {
+      conversation.metadata.repo ??= inferredCwd;
+    }
     return conversation;
   },
   watchPaths: (config) => expandHomePaths(config.providers["claude-code"]?.paths ?? defaultPaths),

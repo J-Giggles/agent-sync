@@ -258,6 +258,25 @@ describe("provider adapters", () => {
     expect(conversation.messages[0].text).toBe("hello");
   });
 
+  it("claude-code provider maps encoded t3 worktree sessions back to project roots", async () => {
+    const root = join(tmpdir(), `agent-sync-claude-worktrees-${crypto.randomUUID()}`);
+    const encodedHome = `-${homedir().slice(1).replaceAll("/", "-")}`;
+    const projectDir = join(root, "projects", `${encodedHome}--t3-worktrees-liftpass-online-t3code-7d976d87`);
+    const sessionPath = join(projectDir, "099f2334-5c50-4908-a8ff-e03b27c5adeb.jsonl");
+    await mkdir(projectDir, { recursive: true });
+    await writeFile(
+      sessionPath,
+      '{"uuid":"m1","type":"user","message":{"content":"worktree"},"timestamp":"2026-05-12T10:00:00.000Z","cwd":"/tmp/worktree"}\n'
+    );
+    const config = configWithProviderPath("claude-code", root);
+
+    const refs = await claudeCodeProvider.discover(config);
+    const conversation = await claudeCodeProvider.read(refs[0]);
+
+    expect(conversation.metadata.cwd).toBe("/tmp/worktree");
+    expect(conversation.metadata.repo).toBe(join(homedir(), "code", "liftpass-online"));
+  });
+
   it("cursor provider reads JSON conversations", async () => {
     const config = configWithProviderPath("cursor", join(fixtureRoot, "cursor"));
 
