@@ -111,7 +111,9 @@ archive/.agent-sync-manifest.json
 
 ## Project-Local Ignore Guard
 
-Before writing matched conversations into a project archive, `agent-sync` ensures the project-local archive path is ignored by Git. For the default `.agents/chats` path, it can add either `.agents/.gitignore` with `chats/` or a root `.gitignore` rule for `/.agents/chats/`. If the project archive path is unsafe or the guard cannot be written, the project-local write is skipped and reported as a diagnostic.
+Before writing matched conversations into a project archive, `agent-sync` ensures the project-local archive path is ignored by Git. For the default `.agents/chats` path, it uses the less invasive guard `<project>/.agents/.gitignore` with `chats/`; it does not edit the project's root `.gitignore`. If the project archive path is unsafe or the guard cannot be written, the project-local write is skipped and reported as a diagnostic.
+
+The default is private-by-default. Chat archives stay ignored unless you deliberately force-add them, for example with `git add -f .agents/chats`.
 
 ## Public Repo Safety
 

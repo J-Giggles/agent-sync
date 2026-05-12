@@ -173,6 +173,7 @@ describe("runSync", () => {
     expect(second.diagnostics).toEqual([]);
     expect(guardAfterFirst).toBe("chats/\n");
     expect(guardAfterSecond).toBe(guardAfterFirst);
+    await expect(stat(join(projectRoot, ".gitignore"))).rejects.toThrow();
     expect(files.indexOf(join(".agents", ".gitignore"))).toBeLessThan(files.findIndex((file) => file.startsWith(join(".agents", "chats"))));
     expect(archiveFiles(files.filter((file) => file.startsWith(join(".agents", "chats"))))).toHaveLength(2);
   });

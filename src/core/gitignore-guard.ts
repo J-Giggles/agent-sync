@@ -30,10 +30,7 @@ function ruleMatches(content: string, relativePath: string): boolean {
 function guardSpecs(projectRoot: string, projectArchiveDir: string): GuardSpec[] {
   const relativePath = normalizeRelativePath(projectArchiveDir);
   if (relativePath === ".agents/chats") {
-    return [
-      { gitignorePath: join(projectRoot, ".agents", ".gitignore"), rule: "chats/" },
-      { gitignorePath: join(projectRoot, ".gitignore"), rule: "/.agents/chats/" },
-    ];
+    return [{ gitignorePath: join(projectRoot, ".agents", ".gitignore"), rule: "chats/" }];
   }
 
   return [{ gitignorePath: join(projectRoot, ".gitignore"), rule: `/${relativePath}/` }];
