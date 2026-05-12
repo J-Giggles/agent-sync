@@ -54,6 +54,19 @@ describe("projects", () => {
     expect(projects).toEqual([{ name: "app-one", root: join(root, "app-one") }]);
   });
 
+  it("skips invalid roots and continues discovering later roots", async () => {
+    const root = await makeRoot();
+    const invalidRoot = join(root, "not-a-directory");
+    const validRoot = join(root, "projects");
+    await writeFile(invalidRoot, "");
+    await mkdir(join(validRoot, "app-one"), { recursive: true });
+    await writeFile(join(validRoot, "app-one", "package.json"), "{}");
+
+    const projects = await discoverProjects([invalidRoot, validRoot]);
+
+    expect(projects).toEqual([{ name: "app-one", root: join(validRoot, "app-one") }]);
+  });
+
   it("matches the most specific project root from cwd metadata", () => {
     const projects = [
       { name: "parent", root: "/work/parent" },

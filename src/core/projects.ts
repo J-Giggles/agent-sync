@@ -35,6 +35,14 @@ async function statIfAccessible(path: string) {
   }
 }
 
+async function readDirectoryIfAccessible(path: string) {
+  try {
+    return await readdir(path);
+  } catch {
+    return undefined;
+  }
+}
+
 function expandProjectRoot(root: string): string {
   if (root === "~") return homedir();
   if (root.startsWith("~/")) return join(homedir(), root.slice(2));
@@ -46,9 +54,9 @@ export async function discoverProjects(projectRoots: string[]): Promise<Discover
 
   for (const projectRoot of projectRoots) {
     const root = expandProjectRoot(projectRoot);
-    if (!(await exists(root))) continue;
+    const entries = await readDirectoryIfAccessible(root);
+    if (!entries) continue;
 
-    const entries = await readdir(root);
     for (const entry of entries) {
       const path = join(root, entry);
       const entryStat = await statIfAccessible(path);
