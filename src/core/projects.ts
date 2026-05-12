@@ -1,4 +1,5 @@
 import { access, readdir, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join, normalize, relative, sep } from "node:path";
 import type { DiscoveredProject, ProjectMatch } from "../types.js";
 
@@ -26,17 +27,32 @@ async function isProject(path: string): Promise<boolean> {
   );
 }
 
+async function statIfAccessible(path: string) {
+  try {
+    return await stat(path);
+  } catch {
+    return undefined;
+  }
+}
+
+function expandProjectRoot(root: string): string {
+  if (root === "~") return homedir();
+  if (root.startsWith("~/")) return join(homedir(), root.slice(2));
+  return root;
+}
+
 export async function discoverProjects(projectRoots: string[]): Promise<DiscoveredProject[]> {
   const projects = new Map<string, DiscoveredProject>();
 
-  for (const root of projectRoots) {
+  for (const projectRoot of projectRoots) {
+    const root = expandProjectRoot(projectRoot);
     if (!(await exists(root))) continue;
 
     const entries = await readdir(root);
     for (const entry of entries) {
       const path = join(root, entry);
-      const entryStat = await stat(path);
-      if (!entryStat.isDirectory()) continue;
+      const entryStat = await statIfAccessible(path);
+      if (!entryStat?.isDirectory()) continue;
       if (!(await isProject(path))) continue;
       projects.set(path, { name: entry, root: path });
     }

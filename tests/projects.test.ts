@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -20,6 +20,38 @@ describe("projects", () => {
     const projects = await discoverProjects([root]);
 
     expect(projects.map((project) => project.name).sort()).toEqual(["app-one", "app-two"]);
+  });
+
+  it("expands tilde project roots during discovery", async () => {
+    const originalHome = process.env.HOME;
+    const home = await makeRoot();
+    process.env.HOME = home;
+
+    try {
+      await mkdir(join(home, "code", "app-one"), { recursive: true });
+      await writeFile(join(home, "code", "app-one", "package.json"), "{}");
+
+      const projects = await discoverProjects(["~/code"]);
+
+      expect(projects).toEqual([{ name: "app-one", root: join(home, "code", "app-one") }]);
+    } finally {
+      if (originalHome === undefined) {
+        delete process.env.HOME;
+      } else {
+        process.env.HOME = originalHome;
+      }
+    }
+  });
+
+  it("skips child entries that cannot be stated", async () => {
+    const root = await makeRoot();
+    await mkdir(join(root, "app-one"), { recursive: true });
+    await writeFile(join(root, "app-one", "package.json"), "{}");
+    await symlink(join(root, "missing-target"), join(root, "broken-link"));
+
+    const projects = await discoverProjects([root]);
+
+    expect(projects).toEqual([{ name: "app-one", root: join(root, "app-one") }]);
   });
 
   it("matches the most specific project root from cwd metadata", () => {
