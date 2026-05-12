@@ -1,20 +1,53 @@
-import { readdir, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, readdir, stat } from "node:fs/promises";
 import { dirname, extname } from "node:path";
 import { expandHomePath } from "./path-utils.js";
 import { enabledProviders } from "../providers/index.js";
 import type { SyncConfig, SyncDiagnostic } from "../types.js";
 
-async function pathExists(path: string): Promise<boolean> {
+async function inspectDirectory(path: string): Promise<"ok" | "missing" | "not-directory" | "inaccessible"> {
+  let stats;
   try {
-    await stat(path);
-    return true;
+    stats = await stat(path);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    return code === "ENOENT" || code === "ENOTDIR" ? "missing" : "inaccessible";
+  }
+
+  if (!stats.isDirectory()) {
+    return "not-directory";
+  }
+
+  try {
+    await access(path, constants.R_OK);
+    return "ok";
   } catch {
-    return false;
+    return "inaccessible";
   }
 }
 
+function diagnosticForDirectory(kind: "project" | "provider" | "central-parent", path: string): SyncDiagnostic {
+  const label =
+    kind === "project" ? "Project root" : kind === "provider" ? "Provider path" : "Central archive parent";
+
+  return { level: "info", message: `${label} exists: ${path}` };
+}
+
+function warningForDirectory(
+  kind: "project" | "provider" | "central-parent",
+  path: string,
+  status: "missing" | "not-directory" | "inaccessible"
+): SyncDiagnostic {
+  const label =
+    kind === "project" ? "Project root" : kind === "provider" ? "Provider path" : "Central archive parent";
+  const reason =
+    status === "missing" ? "missing" : status === "not-directory" ? "is not a directory" : "is not readable";
+
+  return { level: "warn", message: `${label} ${reason}: ${path}` };
+}
+
 async function countJsonAndMarkdownFiles(root: string): Promise<number> {
-  if (!(await pathExists(root))) {
+  if ((await inspectDirectory(root)) !== "ok") {
     return 0;
   }
 
@@ -31,10 +64,9 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
 
   for (const projectRoot of config.projectRoots) {
     const expandedRoot = expandHomePath(projectRoot);
+    const status = await inspectDirectory(expandedRoot);
     diagnostics.push(
-      (await pathExists(expandedRoot))
-        ? { level: "info", message: `Project root exists: ${expandedRoot}` }
-        : { level: "warn", message: `Project root missing: ${expandedRoot}` }
+      status === "ok" ? diagnosticForDirectory("project", expandedRoot) : warningForDirectory("project", expandedRoot, status)
     );
   }
 
@@ -50,20 +82,20 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
     }
 
     for (const path of paths) {
-      diagnostics.push(
-        (await pathExists(path))
-          ? { level: "info", provider: provider.id, sourcePath: path, message: `Provider path exists: ${path}` }
-          : { level: "warn", provider: provider.id, sourcePath: path, message: `Provider path missing: ${path}` }
-      );
+      const status = await inspectDirectory(path);
+      const diagnostic =
+        status === "ok" ? diagnosticForDirectory("provider", path) : warningForDirectory("provider", path, status);
+      diagnostics.push({ ...diagnostic, provider: provider.id, sourcePath: path });
     }
   }
 
   const centralArchiveDir = expandHomePath(config.centralArchiveDir);
   const centralArchiveParent = dirname(centralArchiveDir);
+  const centralParentStatus = await inspectDirectory(centralArchiveParent);
   diagnostics.push(
-    (await pathExists(centralArchiveParent))
-      ? { level: "info", message: `Central archive parent exists: ${centralArchiveParent}` }
-      : { level: "warn", message: `Central archive parent missing: ${centralArchiveParent}` }
+    centralParentStatus === "ok"
+      ? diagnosticForDirectory("central-parent", centralArchiveParent)
+      : warningForDirectory("central-parent", centralArchiveParent, centralParentStatus)
   );
 
   const unknownProjectDir = expandHomePath(config.unknownProjectDir);

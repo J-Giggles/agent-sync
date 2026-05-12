@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
@@ -14,6 +15,11 @@ type SyncManifest = {
   written?: number;
   skipped?: number;
   diagnostics?: SyncDiagnostic[];
+};
+
+export type StatusResult = {
+  level: "info" | "error";
+  lines: string[];
 };
 
 const program = new Command();
@@ -30,7 +36,7 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
   }
 }
 
-async function printStatus(config: SyncConfig): Promise<void> {
+export async function readStatus(config: SyncConfig): Promise<StatusResult> {
   const manifestPath = join(expandHomePath(config.centralArchiveDir), ".agent-sync-manifest.json");
 
   let manifest: SyncManifest;
@@ -38,18 +44,44 @@ async function printStatus(config: SyncConfig): Promise<void> {
     manifest = JSON.parse(await readFile(manifestPath, "utf8")) as SyncManifest;
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      console.log(`No sync manifest found at ${manifestPath}. Run agent-sync sync first.`);
-      return;
+      return {
+        level: "info",
+        lines: [`No sync manifest found at ${manifestPath}. Run agent-sync sync first.`],
+      };
     }
 
-    throw error;
+    if (error instanceof SyntaxError) {
+      return {
+        level: "error",
+        lines: [`Could not parse sync manifest at ${manifestPath}: ${error.message}`],
+      };
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      level: "error",
+      lines: [`Could not read sync manifest at ${manifestPath}: ${message}`],
+    };
   }
 
-  console.log(`manifest: ${manifestPath}`);
-  console.log(`updated: ${manifest.updatedAt ?? "unknown"}`);
-  console.log(`written: ${manifest.written ?? 0}`);
-  console.log(`skipped: ${manifest.skipped ?? 0}`);
-  console.log(`diagnostics: ${manifest.diagnostics?.length ?? 0}`);
+  return {
+    level: "info",
+    lines: [
+      `manifest: ${manifestPath}`,
+      `updated: ${manifest.updatedAt ?? "unknown"}`,
+      `written: ${manifest.written ?? 0}`,
+      `skipped: ${manifest.skipped ?? 0}`,
+      `diagnostics: ${manifest.diagnostics?.length ?? 0}`,
+    ],
+  };
+}
+
+async function printStatus(config: SyncConfig): Promise<void> {
+  const status = await readStatus(config);
+  const output = status.level === "error" ? console.error : console.log;
+  for (const line of status.lines) {
+    output(line);
+  }
 }
 
 program.name("agent-sync").description("Sync local agent chat histories").version("0.1.0");
@@ -83,4 +115,6 @@ program.command("doctor").description("Check provider and archive configuration"
   }
 });
 
-program.parse();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  program.parse();
+}
