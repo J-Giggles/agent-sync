@@ -18,7 +18,7 @@ export type SyncedConversationOutput = {
 
 export type SyncResult = {
   written: number;
-  skipped: number;
+  inSync: number;
   diagnostics: SyncDiagnostic[];
   conversations: SyncedConversationOutput[];
 };
@@ -52,10 +52,10 @@ function isInside(path: string, parent: string): boolean {
   return rel === "" || (!rel.startsWith("..") && rel !== ".." && !rel.startsWith(`..${sep}`));
 }
 
-async function writeIfChanged(path: string, content: string): Promise<"written" | "skipped"> {
+async function writeIfChanged(path: string, content: string): Promise<"written" | "in-sync"> {
   try {
     if ((await readFile(path, "utf8")) === content) {
-      return "skipped";
+      return "in-sync";
     }
   } catch {
     // Missing or unreadable files are rewritten below. Real write failures still surface.
@@ -66,23 +66,24 @@ async function writeIfChanged(path: string, content: string): Promise<"written" 
   return "written";
 }
 
-async function writeRenderedTargets(targets: RenderedTarget[]): Promise<Pick<SyncResult, "written" | "skipped">> {
+async function writeRenderedTargets(targets: RenderedTarget[]): Promise<Pick<SyncResult, "written" | "inSync">> {
   let written = 0;
-  let skipped = 0;
+  let inSync = 0;
 
   for (const target of targets) {
     const result = await writeIfChanged(target.path, target.content);
     if (result === "written") written += 1;
-    else skipped += 1;
+    else inSync += 1;
   }
 
-  return { written, skipped };
+  return { written, inSync };
 }
 
 type SyncManifest = {
   updatedAt?: unknown;
   schemaVersion?: unknown;
   written?: unknown;
+  inSync?: unknown;
   skipped?: unknown;
   diagnostics?: unknown;
   conversations?: unknown;
@@ -123,7 +124,8 @@ async function writeManifest(config: SyncConfig, result: SyncResult, options: Ru
   const summary = {
     schemaVersion: 1,
     written: result.written,
-    skipped: result.skipped,
+    inSync: result.inSync,
+    error: result.diagnostics.filter((diagnostic) => diagnostic.level === "error").length,
     diagnostics: result.diagnostics,
     conversations: mergeScopedConversations(existing?.conversations, options.providerIds, result.conversations),
   };
@@ -153,11 +155,11 @@ export async function runSync(config: SyncConfig, options: RunSyncOptions = {}):
   const diagnostics: SyncDiagnostic[] = [];
   const conversations: SyncedConversationOutput[] = [];
   let written = 0;
-  let skipped = 0;
+  let inSync = 0;
   if (!isSafeRelativePath(config.projectArchiveDir)) {
     return {
       written,
-      skipped,
+      inSync,
       conversations,
       diagnostics: [
         {
@@ -246,7 +248,7 @@ export async function runSync(config: SyncConfig, options: RunSyncOptions = {}):
       try {
         const counts = await writeRenderedTargets(renderedTargets);
         written += counts.written;
-        skipped += counts.skipped;
+        inSync += counts.inSync;
         conversations.push({
           provider: provider.id,
           sourcePath: ref.path,
@@ -265,7 +267,7 @@ export async function runSync(config: SyncConfig, options: RunSyncOptions = {}):
     }
   }
 
-  const result = { written, skipped, diagnostics, conversations };
+  const result = { written, inSync, diagnostics, conversations };
   await writeManifest(archiveConfig, result, options);
   return result;
 }

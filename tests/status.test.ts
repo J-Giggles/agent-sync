@@ -91,7 +91,8 @@ describe("readStatus", () => {
           schemaVersion: 1,
           updatedAt: "2026-05-12T10:30:00.000Z",
           written: 1,
-          skipped: 2,
+          inSync: 2,
+          error: 0,
           diagnostics: [],
           conversations: [
             {
@@ -120,6 +121,8 @@ describe("readStatus", () => {
     expect(status.level).toBe("info");
     expect(lines).toContain("enabled providers: codex");
     expect(lines).toContain("discovered projects: 1 (app)");
+    expect(lines).toContain("in-sync: 2");
+    expect(lines).toContain("error: 0");
     expect(lines).toContain("latest synced conversations:");
     expect(lines).toContain(outputPath);
     expect(lines).toContain("unknown-project archive files: 2");

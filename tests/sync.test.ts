@@ -77,12 +77,12 @@ describe("runSync", () => {
 
     expect(first.diagnostics).toEqual([]);
     expect(first.written).toBe(6);
-    expect(first.skipped).toBe(0);
+    expect(first.inSync).toBe(0);
     expect(second.written).toBe(0);
-    expect(second.skipped).toBe(6);
+    expect(second.inSync).toBe(6);
     expect(second.diagnostics).toEqual([]);
     expect(third.written).toBe(0);
-    expect(third.skipped).toBe(6);
+    expect(third.inSync).toBe(6);
     expect(third.diagnostics).toEqual([]);
     expect(manifestAfterThird).toBe(manifestAfterSecond);
 
@@ -108,13 +108,13 @@ describe("runSync", () => {
     const manifest = JSON.parse(await readFile(join(archive, ".agent-sync-manifest.json"), "utf8")) as {
       schemaVersion: number;
       written: number;
-      skipped: number;
+      inSync: number;
       diagnostics: unknown[];
       conversations: Array<{ provider: string; sourcePath: string; outputs: string[] }>;
     };
     expect(manifest.schemaVersion).toBe(1);
     expect(manifest.written).toBe(0);
-    expect(manifest.skipped).toBe(6);
+    expect(manifest.inSync).toBe(6);
     expect(manifest.diagnostics).toEqual([]);
     expect(manifest.conversations).toEqual([
       expect.objectContaining({
@@ -388,7 +388,7 @@ describe("runSync", () => {
     });
 
     expect(result.written).toBe(0);
-    expect(result.skipped).toBe(0);
+    expect(result.inSync).toBe(0);
     expect(result.diagnostics).toEqual([
       expect.objectContaining({
         level: "error",

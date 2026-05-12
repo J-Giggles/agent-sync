@@ -94,7 +94,8 @@ export function createWatcher(config: SyncConfig): FSWatcher | undefined {
     pendingProviderIds = new Set<ProviderId>();
 
     const result = await runSync(config, providerIds && providerIds.length > 0 ? { providerIds } : {});
-    console.log(`agent-sync sync complete: written ${result.written}, skipped ${result.skipped}`);
+    const errors = result.diagnostics.filter((diagnostic) => diagnostic.level === "error").length;
+    console.log(`agent-sync sync complete: written ${result.written}, in-sync ${result.inSync}, error ${errors}`);
 
     for (const diagnostic of result.diagnostics) {
       const source = diagnostic.sourcePath ? ` ${diagnostic.sourcePath}` : "";

@@ -16,7 +16,9 @@ import type { SyncConfig, SyncDiagnostic } from "./types.js";
 type SyncManifest = {
   updatedAt?: string;
   written?: number;
+  inSync?: number;
   skipped?: number;
+  error?: number;
   diagnostics?: SyncDiagnostic[];
   conversations?: unknown;
 };
@@ -150,7 +152,8 @@ export async function readStatus(config: SyncConfig): Promise<StatusResult> {
       `discovered projects: ${projects.length}${projects.length > 0 ? ` (${projects.map((project) => project.name).join(", ")})` : ""}`,
       `updated: ${manifest.updatedAt ?? "unknown"}`,
       `written: ${manifest.written ?? 0}`,
-      `skipped: ${manifest.skipped ?? 0}`,
+      `in-sync: ${manifest.inSync ?? manifest.skipped ?? 0}`,
+      `error: ${manifest.error ?? manifest.diagnostics?.filter((diagnostic) => diagnostic.level === "error").length ?? 0}`,
       `diagnostics: ${manifest.diagnostics?.length ?? 0}`,
       "latest synced conversations:",
       ...latestLines,
@@ -183,7 +186,8 @@ program.command("sync").description("Run one-shot chat sync").action(async () =>
   const config = await loadConfig();
   const result = await runSync(config);
   console.log(`written: ${result.written}`);
-  console.log(`skipped: ${result.skipped}`);
+  console.log(`in-sync: ${result.inSync}`);
+  console.log(`error: ${result.diagnostics.filter((diagnostic) => diagnostic.level === "error").length}`);
 
   for (const diagnostic of result.diagnostics) {
     printDiagnostic(diagnostic);
