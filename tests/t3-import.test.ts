@@ -344,6 +344,7 @@ describe("runPullT3", () => {
     expect(lines).toContain("by provider:");
     expect(lines).toContain("  - claude-code: 1 conversations, 1 messages");
     expect(lines).toContain("  - codex: 1 conversations, 2 messages");
+    expect(lines).toContain("No changes written. Re-run with --write --database <t3-state.sqlite> after reviewing this dry run.");
     expect(lines).not.toContain("- would import: [agent-sync] codex / agent-sync / 2026-05-12 (2 messages)");
   });
 

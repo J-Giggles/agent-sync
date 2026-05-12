@@ -668,6 +668,10 @@ export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Op
     lines.push("Use --verbose to list every planned conversation.");
   }
 
+  if (result.dryRun && result.planned > 0) {
+    lines.push("No changes written. Re-run with --write --database <t3-state.sqlite> after reviewing this dry run.");
+  }
+
   return lines;
 }
 
