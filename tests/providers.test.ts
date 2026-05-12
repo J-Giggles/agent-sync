@@ -181,6 +181,37 @@ describe("provider adapters", () => {
     expect(conversation.messages[0].createdAt).toBe("2026-05-12T18:00:00.000Z");
   });
 
+  it("normalizes ISO provider timestamps without millisecond precision", async () => {
+    const root = join(tmpdir(), `agent-sync-iso-timestamp-${crypto.randomUUID()}`);
+    const path = join(root, "session.jsonl");
+    await mkdir(root, { recursive: true });
+    await writeFile(path, '{"id":"m1","role":"user","content":"iso timestamp","timestamp":"2026-05-12T10:00:00Z"}\n');
+    const config = configWithProviderPath("codex", path);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.startedAt).toBe("2026-05-12T10:00:00.000Z");
+    expect(conversation.messages[0].createdAt).toBe("2026-05-12T10:00:00.000Z");
+  });
+
+  it("normalizes ISO provider timestamps with timezone offsets", async () => {
+    const root = join(tmpdir(), `agent-sync-offset-timestamp-${crypto.randomUUID()}`);
+    const path = join(root, "session.jsonl");
+    await mkdir(root, { recursive: true });
+    await writeFile(
+      path,
+      '{"id":"m1","role":"user","content":"offset timestamp","timestamp":"2026-05-12T10:00:00+02:00"}\n'
+    );
+    const config = configWithProviderPath("codex", path);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.startedAt).toBe("2026-05-12T08:00:00.000Z");
+    expect(conversation.messages[0].createdAt).toBe("2026-05-12T08:00:00.000Z");
+  });
+
   it("chooses updatedAt from parseable timestamps by numeric time", async () => {
     const path = join(fixtureRoot, "codex", "timestamp-order-session.jsonl");
     const config = configWithProviderPath("codex", path);
