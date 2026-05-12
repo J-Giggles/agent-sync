@@ -48,6 +48,37 @@ describe("provider adapters", () => {
     expect(conversation.metadata.cwd).toBe("/work/app");
   });
 
+  it("codex provider discovers rollout sessions and reads payload messages", async () => {
+    const root = join(tmpdir(), `agent-sync-codex-rollout-${crypto.randomUUID()}`);
+    const sessionDir = join(root, "sessions", "2026", "05", "12");
+    const sessionPath = join(sessionDir, "rollout-2026-05-12T18-49-58-019e1d18-669d-7ef2-8321-234146880e59.jsonl");
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      sessionPath,
+      '{"timestamp":"2026-05-12T18:49:58.000Z","type":"session_meta","payload":{"id":"019e1d18-669d-7ef2-8321-234146880e59","cwd":"/work/app"}}\n' +
+        '{"timestamp":"2026-05-12T18:50:00.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"codex rollout hello"}]}}\n' +
+        '{"timestamp":"2026-05-12T18:51:00.000Z","type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"codex rollout response"}]}}\n'
+    );
+    const config = configWithProviderPath("codex", root);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(refs).toEqual([
+      {
+        provider: "codex",
+        path: sessionPath,
+        kind: "jsonl",
+        idHint: "019e1d18-669d-7ef2-8321-234146880e59",
+      },
+    ]);
+    expect(conversation.providerConversationId).toBe("019e1d18-669d-7ef2-8321-234146880e59");
+    expect(conversation.startedAt).toBe("2026-05-12T18:49:58.000Z");
+    expect(conversation.updatedAt).toBe("2026-05-12T18:51:00.000Z");
+    expect(conversation.metadata.cwd).toBe("/work/app");
+    expect(conversation.messages.map((message) => message.text)).toEqual(["codex rollout hello", "codex rollout response"]);
+  });
+
   it("expands configured tilde paths without reading real home provider directories", async () => {
     const previousHome = process.env.HOME;
     process.env.HOME = join(fixtureRoot, "home");
