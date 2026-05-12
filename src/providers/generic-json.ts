@@ -87,6 +87,11 @@ function sourceKindForPath(path: string): RawConversationRef["kind"] {
   return extname(path).toLowerCase() === ".jsonl" ? "jsonl" : "json";
 }
 
+function isLikelyConversationFile(path: string): boolean {
+  const name = basename(path).toLowerCase();
+  return !/(^|[-_.])(index|cache|metadata|state|lock|manifest)([-_.]|$)/.test(name);
+}
+
 async function lstatIfAccessible(path: string) {
   try {
     return await lstat(path);
@@ -121,6 +126,7 @@ export async function discoverJsonRefs(
     for (const file of files) {
       const extension = extname(file).toLowerCase();
       if (extension !== ".json" && extension !== ".jsonl") continue;
+      if (!isLikelyConversationFile(file)) continue;
 
       refs.push({
         provider,

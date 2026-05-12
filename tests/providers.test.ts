@@ -82,13 +82,16 @@ describe("provider adapters", () => {
   });
 
   it("ignores non-conversation files under provider directories", async () => {
-    const config = configWithProviderPath("codex", join(fixtureRoot, "codex"));
+    const root = join(tmpdir(), `agent-sync-provider-index-${crypto.randomUUID()}`);
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, "session.jsonl"), '{"id":"m1","role":"user","content":"inside"}\n');
+    await writeFile(join(root, "session_index.jsonl"), '{"id":"idx","updatedAt":"2026-05-06T15:13:29.656Z"}\n');
+    await writeFile(join(root, "conversation-cache.json"), "{}\n");
+    const config = configWithProviderPath("codex", root);
 
     const refs = await codexProvider.discover(config);
 
-    expect(refs.map((ref) => ref.path).sort()).toContain(join(fixtureRoot, "codex", "session.jsonl"));
-    expect(refs.map((ref) => ref.path)).not.toContain(join(fixtureRoot, "codex", "auth.json"));
-    expect(refs.map((ref) => ref.path)).not.toContain(join(fixtureRoot, "codex", "settings.json"));
+    expect(refs.map((ref) => ref.path)).toEqual([join(root, "session.jsonl")]);
   });
 
   it("does not follow symlinks out of provider directories", async () => {
