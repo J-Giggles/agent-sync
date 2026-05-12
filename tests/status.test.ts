@@ -43,6 +43,33 @@ describe("readStatus", () => {
     expect(status.lines.join("\n")).toContain("Invalid sync manifest");
   });
 
+  it("returns a useful message for parsed null manifests", async () => {
+    const root = join(tmpdir(), `agent-sync-status-${crypto.randomUUID()}`);
+    const archive = join(root, "archive");
+    await mkdir(archive, { recursive: true });
+    await writeFile(join(archive, ".agent-sync-manifest.json"), "null\n");
+
+    const status = await readStatus(configWithArchive(archive));
+
+    expect(status.level).toBe("error");
+    expect(status.lines.join("\n")).toContain("Invalid sync manifest");
+  });
+
+  it("safely ignores malformed conversation entries", async () => {
+    const root = join(tmpdir(), `agent-sync-status-${crypto.randomUUID()}`);
+    const archive = join(root, "archive");
+    await mkdir(archive, { recursive: true });
+    await writeFile(
+      join(archive, ".agent-sync-manifest.json"),
+      `${JSON.stringify({ schemaVersion: 1, conversations: [null] }, null, 2)}\n`
+    );
+
+    const status = await readStatus(configWithArchive(archive));
+
+    expect(status.level).toBe("info");
+    expect(status.lines.join("\n")).toContain("latest synced conversations:\n  none recorded");
+  });
+
   it("summarizes enabled providers, discovered projects, latest outputs, and unknown archive count", async () => {
     const root = join(tmpdir(), `agent-sync-status-${crypto.randomUUID()}`);
     const projectsRoot = join(root, "projects");

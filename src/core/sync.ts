@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join, normalize, relative, sep } from "node:path";
 import { archiveTargets } from "./archive-paths.js";
+import { ensureProjectArchiveIgnored } from "./gitignore-guard.js";
 import { expandHomePath, isSafeRelativePath } from "./path-utils.js";
 import { discoverProjects, matchProject } from "./projects.js";
 import { renderJson, renderMarkdown } from "./render.js";
@@ -44,6 +45,11 @@ function metadataPaths(conversation: NormalizedConversation): string[] {
   const value = conversation.metadata.metadataPaths;
   const paths = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
   return [...paths, conversation.source.path];
+}
+
+function isInside(path: string, parent: string): boolean {
+  const rel = relative(normalize(parent), normalize(path));
+  return rel === "" || (!rel.startsWith("..") && rel !== ".." && !rel.startsWith(`..${sep}`));
 }
 
 async function writeIfChanged(path: string, content: string): Promise<"written" | "skipped"> {
@@ -220,6 +226,21 @@ export async function runSync(config: SyncConfig, options: RunSyncOptions = {}):
           message: `Failed to render archive targets: ${errorMessage(error)}`,
         });
         continue;
+      }
+
+      if (conversation.project) {
+        const projectArchiveRoot = join(conversation.project.root, archiveConfig.projectArchiveDir);
+        try {
+          await ensureProjectArchiveIgnored(conversation.project.root, archiveConfig.projectArchiveDir);
+        } catch (error) {
+          diagnostics.push({
+            level: "error",
+            provider: provider.id,
+            sourcePath: ref.path,
+            message: `Failed to ensure project archive ignore guard: ${errorMessage(error)}`,
+          });
+          renderedTargets = renderedTargets.filter((target) => !isInside(target.path, projectArchiveRoot));
+        }
       }
 
       try {

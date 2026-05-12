@@ -89,6 +89,7 @@ describe("runSync", () => {
     const centralMatched = archiveFiles(await listFiles(join(archive, "app")));
     const projectLocal = archiveFiles(await listFiles(join(projectRoot, ".agents", "chats")));
     const unknownFiles = archiveFiles(await listFiles(unknown));
+    const projectGitignore = await readFile(join(projectRoot, ".agents", ".gitignore"), "utf8");
 
     expect(centralMatched).toHaveLength(2);
     expect(centralMatched.some((file) => file.endsWith(".json"))).toBe(true);
@@ -96,6 +97,7 @@ describe("runSync", () => {
     expect(projectLocal).toHaveLength(2);
     expect(projectLocal.some((file) => file.endsWith(".json"))).toBe(true);
     expect(projectLocal.some((file) => file.endsWith(".md"))).toBe(true);
+    expect(projectGitignore).toContain("chats/");
     expect(unknownFiles).toHaveLength(2);
     expect(unknownFiles.some((file) => file.endsWith(".json"))).toBe(true);
     expect(unknownFiles.some((file) => file.endsWith(".md"))).toBe(true);
@@ -129,6 +131,50 @@ describe("runSync", () => {
         outputs: expect.arrayContaining([expect.stringContaining(unknown)]),
       }),
     ]);
+  });
+
+  it("creates an idempotent ignore guard before project-local archive files", async () => {
+    const root = await makeTempRoot("agent-sync-project-ignore");
+    const projectsRoot = join(root, "projects");
+    const providerDir = join(root, "provider");
+    const projectRoot = join(projectsRoot, "app");
+    const archive = join(root, "archive");
+    const unknown = join(root, "unknown-project");
+
+    await mkdir(providerDir, { recursive: true });
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(
+      join(providerDir, "matched-session.jsonl"),
+      `${JSON.stringify({
+        id: "m1",
+        role: "user",
+        content: "guarded",
+        timestamp: "2026-05-12T10:00:00.000Z",
+        cwd: projectRoot,
+      })}\n`
+    );
+
+    const config: SyncConfig = {
+      projectRoots: [projectsRoot],
+      centralArchiveDir: archive,
+      unknownProjectDir: unknown,
+      projectArchiveDir: ".agents/chats",
+      providers: { codex: { enabled: true, paths: [providerDir] } },
+    };
+
+    const first = await runSync(config);
+    const guardAfterFirst = await readFile(join(projectRoot, ".agents", ".gitignore"), "utf8");
+    const second = await runSync(config);
+    const guardAfterSecond = await readFile(join(projectRoot, ".agents", ".gitignore"), "utf8");
+    const files = await listFiles(projectRoot);
+
+    expect(first.diagnostics).toEqual([]);
+    expect(second.diagnostics).toEqual([]);
+    expect(guardAfterFirst).toBe("chats/\n");
+    expect(guardAfterSecond).toBe(guardAfterFirst);
+    expect(files.indexOf(join(".agents", ".gitignore"))).toBeLessThan(files.findIndex((file) => file.startsWith(join(".agents", "chats"))));
+    expect(archiveFiles(files.filter((file) => file.startsWith(join(".agents", "chats"))))).toHaveLength(2);
   });
 
   it("reports malformed provider files and continues syncing valid conversations", async () => {

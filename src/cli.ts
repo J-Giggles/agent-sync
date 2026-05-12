@@ -17,13 +17,15 @@ type SyncManifest = {
   written?: number;
   skipped?: number;
   diagnostics?: SyncDiagnostic[];
-  conversations?: Array<{
-    provider?: string;
-    sourcePath?: string;
-    projectName?: string;
-    updatedAt?: string;
-    outputs?: string[];
-  }>;
+  conversations?: unknown;
+};
+
+type ManifestConversation = {
+  provider?: string;
+  sourcePath?: string;
+  projectName?: string;
+  updatedAt?: string;
+  outputs?: string[];
 };
 
 export type StatusResult = {
@@ -45,7 +47,22 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
   }
 }
 
-function validateManifestShape(manifest: SyncManifest, manifestPath: string): StatusResult | undefined {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isManifestConversation(value: unknown): value is ManifestConversation {
+  return isRecord(value);
+}
+
+function validateManifestShape(manifest: unknown, manifestPath: string): StatusResult | undefined {
+  if (!isRecord(manifest)) {
+    return {
+      level: "error",
+      lines: [`Invalid sync manifest at ${manifestPath}: manifest must be an object.`],
+    };
+  }
+
   if (manifest.conversations !== undefined && !Array.isArray(manifest.conversations)) {
     return {
       level: "error",
@@ -69,15 +86,19 @@ async function countJsonAndMarkdownFiles(root: string): Promise<number> {
   }
 }
 
+function manifestConversations(manifest: SyncManifest): ManifestConversation[] {
+  return Array.isArray(manifest.conversations) ? manifest.conversations.filter(isManifestConversation) : [];
+}
+
 export async function readStatus(config: SyncConfig): Promise<StatusResult> {
   const manifestPath = join(expandHomePath(config.centralArchiveDir), ".agent-sync-manifest.json");
   const enabledProviderIds = enabledProviders(config).map((provider) => provider.id);
   const projects = await discoverProjects(config.projectRoots);
   const unknownProjectCount = await countJsonAndMarkdownFiles(expandHomePath(config.unknownProjectDir));
 
-  let manifest: SyncManifest;
+  let parsedManifest: unknown;
   try {
-    manifest = JSON.parse(await readFile(manifestPath, "utf8")) as SyncManifest;
+    parsedManifest = JSON.parse(await readFile(manifestPath, "utf8"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") {
       return {
@@ -100,10 +121,11 @@ export async function readStatus(config: SyncConfig): Promise<StatusResult> {
     };
   }
 
-  const shapeError = validateManifestShape(manifest, manifestPath);
+  const shapeError = validateManifestShape(parsedManifest, manifestPath);
   if (shapeError) return shapeError;
+  const manifest = parsedManifest as SyncManifest;
 
-  const latestConversations = (manifest.conversations ?? [])
+  const latestConversations = manifestConversations(manifest)
     .filter((conversation) => Array.isArray(conversation.outputs) && conversation.outputs.length > 0)
     .sort((a, b) => Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? ""))
     .slice(0, 5);

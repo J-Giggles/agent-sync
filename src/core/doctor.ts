@@ -1,6 +1,7 @@
 import { constants } from "node:fs";
 import { access, readdir, stat } from "node:fs/promises";
 import { dirname, extname } from "node:path";
+import { inspectProjectArchiveIgnore } from "./gitignore-guard.js";
 import { expandHomePath } from "./path-utils.js";
 import { discoverProjects } from "./projects.js";
 import { enabledProviders } from "../providers/index.js";
@@ -76,6 +77,17 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
     level: "info",
     message: `Discovered projects: ${projects.length}${projects.length > 0 ? ` (${projects.map((project) => project.name).join(", ")})` : ""}`,
   });
+
+  for (const project of projects) {
+    const status = await inspectProjectArchiveIgnore(project.root, config.projectArchiveDir);
+    if (!status.ignored) {
+      diagnostics.push({
+        level: "warn",
+        sourcePath: status.archivePath,
+        message: `Project archive is not ignored: ${status.archivePath}`,
+      });
+    }
+  }
 
   for (const provider of enabledProviders(config)) {
     const paths = provider.watchPaths?.(config) ?? [];

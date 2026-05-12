@@ -88,4 +88,58 @@ describe("runDoctor", () => {
       ])
     );
   });
+
+  it("warns when a discovered project is missing an ignore guard for project-local archives", async () => {
+    const root = join(tmpdir(), `agent-sync-doctor-${crypto.randomUUID()}`);
+    const projectsRoot = join(root, "projects");
+    const projectRoot = join(projectsRoot, "app");
+
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+
+    const diagnostics = await runDoctor({
+      projectRoots: [projectsRoot],
+      centralArchiveDir: join(root, "archive"),
+      unknownProjectDir: join(root, "unknown-project"),
+      projectArchiveDir: ".agents/chats",
+      providers: {},
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("Project archive is not ignored"),
+          sourcePath: join(projectRoot, ".agents", "chats"),
+        }),
+      ])
+    );
+  });
+
+  it("does not warn when a discovered project has an ignore guard for project-local archives", async () => {
+    const root = join(tmpdir(), `agent-sync-doctor-${crypto.randomUUID()}`);
+    const projectsRoot = join(root, "projects");
+    const projectRoot = join(projectsRoot, "app");
+
+    await mkdir(join(projectRoot, ".agents"), { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(join(projectRoot, ".agents", ".gitignore"), "chats/\n");
+
+    const diagnostics = await runDoctor({
+      projectRoots: [projectsRoot],
+      centralArchiveDir: join(root, "archive"),
+      unknownProjectDir: join(root, "unknown-project"),
+      projectArchiveDir: ".agents/chats",
+      providers: {},
+    });
+
+    expect(diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("Project archive is not ignored"),
+        }),
+      ])
+    );
+  });
 });
