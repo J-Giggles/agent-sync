@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
 import { claudeCodeProvider } from "../src/providers/claude-code.js";
 import { codexProvider } from "../src/providers/codex.js";
@@ -9,6 +11,7 @@ import { t3codeProvider } from "../src/providers/t3code.js";
 import type { SyncConfig } from "../src/types.js";
 
 const fixtureRoot = join(process.cwd(), "tests", "fixtures");
+const execFileAsync = promisify(execFile);
 
 function configWithProviderPath(provider: string, path: string): SyncConfig {
   return {
@@ -299,5 +302,107 @@ describe("provider adapters", () => {
     expect(conversation.provider).toBe("t3code");
     expect(conversation.title).toBe("T3 sync");
     expect(conversation.messages[0].text).toBe("t3 hello");
+  });
+
+  it("t3code provider discovers and reads SQLite thread projections", async () => {
+    const root = join(tmpdir(), `agent-sync-t3-sqlite-${crypto.randomUUID()}`);
+    const path = join(root, "state.sqlite");
+    await mkdir(root, { recursive: true });
+    await execFileAsync("sqlite3", [
+      path,
+      `
+      create table projection_projects (
+        project_id text primary key,
+        title text not null,
+        workspace_root text not null,
+        scripts_json text not null,
+        created_at text not null,
+        updated_at text not null,
+        deleted_at text
+      );
+      create table projection_threads (
+        thread_id text primary key,
+        project_id text not null,
+        title text not null,
+        branch text,
+        worktree_path text,
+        latest_turn_id text,
+        created_at text not null,
+        updated_at text not null,
+        deleted_at text
+      );
+      create table projection_thread_messages (
+        message_id text primary key,
+        thread_id text not null,
+        turn_id text,
+        role text not null,
+        text text not null,
+        is_streaming integer not null,
+        created_at text not null,
+        updated_at text not null
+      );
+      insert into projection_projects values (
+        'project-1',
+        'Project',
+        '/work/app',
+        '{}',
+        '2026-05-12T10:00:00.000Z',
+        '2026-05-12T10:02:00.000Z',
+        null
+      );
+      insert into projection_threads values (
+        'thread-1',
+        'project-1',
+        'T3 SQLite sync',
+        'staging',
+        '/work/app',
+        'turn-1',
+        '2026-05-12T10:00:00.000Z',
+        '2026-05-12T10:03:00.000Z',
+        null
+      );
+      insert into projection_thread_messages values (
+        'message-1',
+        'thread-1',
+        'turn-1',
+        'user',
+        't3 sqlite hello',
+        0,
+        '2026-05-12T10:01:00.000Z',
+        '2026-05-12T10:01:00.000Z'
+      );
+      insert into projection_thread_messages values (
+        'message-2',
+        'thread-1',
+        'turn-1',
+        'assistant',
+        't3 sqlite response',
+        0,
+        '2026-05-12T10:02:00.000Z',
+        '2026-05-12T10:02:00.000Z'
+      );
+      `,
+    ]);
+    const config = configWithProviderPath("t3code", path);
+
+    const refs = await t3codeProvider.discover(config);
+    const conversation = await t3codeProvider.read(refs[0]);
+
+    expect(refs).toEqual([
+      {
+        provider: "t3code",
+        path,
+        kind: "sqlite",
+        idHint: "thread-1",
+      },
+    ]);
+    expect(conversation.provider).toBe("t3code");
+    expect(conversation.providerConversationId).toBe("thread-1");
+    expect(conversation.title).toBe("T3 SQLite sync");
+    expect(conversation.startedAt).toBe("2026-05-12T10:00:00.000Z");
+    expect(conversation.updatedAt).toBe("2026-05-12T10:03:00.000Z");
+    expect(conversation.messages.map((message) => message.text)).toEqual(["t3 sqlite hello", "t3 sqlite response"]);
+    expect(conversation.metadata.cwd).toBe("/work/app");
+    expect(conversation.metadata.branch).toBe("staging");
   });
 });
