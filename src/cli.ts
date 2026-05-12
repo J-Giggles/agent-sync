@@ -2,14 +2,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { extname, join } from "node:path";
-import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
+import { cancel, isCancel, multiselect } from "@clack/prompts";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
-import { formatPullT3Result, parsePullT3Selection, runPullT3, sourceConversationKey, type PullT3Options } from "./core/t3-import.js";
+import { formatPullT3Result, runPullT3, sourceConversationKey, type PullT3Options } from "./core/t3-import.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
 import { enabledProviders } from "./providers/index.js";
@@ -51,6 +51,7 @@ type PullT3CliOptions = {
   limit?: number;
   verbose?: boolean;
   all?: boolean;
+  includeSubagents?: boolean;
 };
 
 function printDiagnostic(diagnostic: SyncDiagnostic): void {
@@ -194,6 +195,7 @@ function pullT3OptionsFromCli(options: PullT3CliOptions): PullT3Options {
     provider: options.provider,
     since: options.since,
     limit: options.limit,
+    includeSubagents: options.includeSubagents,
   };
 }
 
@@ -209,47 +211,59 @@ async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOpti
   });
   if (preview.items.length === 0) return [];
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    let scopedItems = preview.items;
+  let scopedItems = preview.items;
 
-    if (!options.project) {
-      const projectGroups = new Map<string, { conversations: number; messages: number }>();
-      for (const item of preview.items) {
-        const group = projectGroups.get(item.project) ?? { conversations: 0, messages: 0 };
-        group.conversations += 1;
-        group.messages += item.messageCount;
-        projectGroups.set(item.project, group);
-      }
-      const projects = [...projectGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
-      console.log("Select project(s) to browse:");
-      projects.forEach(([project, group], index) => {
-        console.log(`${index + 1}. ${project} (${group.conversations} conversations, ${group.messages} messages)`);
-      });
-
-      const projectAnswer = await rl.question("Projects [numbers/ranges, all, blank to cancel]: ");
-      const selectedProjectIndexes = parsePullT3Selection(projectAnswer, projects.length);
-      const selectedProjects = new Set(selectedProjectIndexes.map((index) => projects[index][0]));
-      scopedItems = preview.items.filter((item) => selectedProjects.has(item.project));
+  if (!options.project) {
+    const projectGroups = new Map<string, { conversations: number; messages: number; subagents: number }>();
+    for (const item of preview.items) {
+      const group = projectGroups.get(item.project) ?? { conversations: 0, messages: 0, subagents: 0 };
+      group.conversations += 1;
+      group.messages += item.messageCount;
+      if (item.kind === "subagent") group.subagents += 1;
+      projectGroups.set(item.project, group);
     }
-
-    if (scopedItems.length === 0) return [];
-
-    console.log("Select chat(s) to import:");
-    scopedItems.forEach((item, index) => {
-      console.log(
-        `${index + 1}. ${item.provider} / ${item.project} / ${item.title.replace(/^\[agent-sync\] [^/]+ \/ [^/]+ \/ /, "")} (${item.messageCount} messages, source ${item.providerConversationId})`
-      );
+    const projects = [...projectGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const selectedProjects = await multiselect({
+      message: "Select project(s) to browse",
+      options: projects.map(([project, group]) => ({
+        value: project,
+        label: project,
+        hint: `${group.conversations} chats, ${group.messages} messages${group.subagents > 0 ? `, ${group.subagents} subagents` : ""}`,
+      })),
+      required: false,
     });
 
-    const chatAnswer = await rl.question("Chats [numbers/ranges, all, blank to cancel]: ");
-    const selectedChatIndexes = parsePullT3Selection(chatAnswer, scopedItems.length);
-    return selectedChatIndexes.map((index) =>
-      sourceConversationKey(scopedItems[index].provider, scopedItems[index].providerConversationId)
-    );
-  } finally {
-    rl.close();
+    if (isCancel(selectedProjects) || selectedProjects.length === 0) {
+      cancel("No projects selected.");
+      return [];
+    }
+
+    const selectedProjectSet = new Set(selectedProjects);
+    scopedItems = preview.items.filter((item) => selectedProjectSet.has(item.project));
   }
+
+  if (scopedItems.length === 0) return [];
+
+  const selectedChats = await multiselect({
+    message: "Select chat(s) to import",
+    options: scopedItems.map((item) => {
+      const date = item.title.replace(/^\[agent-sync\] [^/]+ \/ [^/]+ \/ /, "");
+      const kind = item.kind === "subagent" ? `subagent:${item.agentRole ?? "unknown"}` : "top-level";
+      return {
+        value: sourceConversationKey(item.provider, item.providerConversationId),
+        label: `${item.provider} / ${item.project} / ${date}`,
+        hint: `${kind}, ${item.messageCount} messages, source ${item.providerConversationId}`,
+      };
+    }),
+    required: false,
+  });
+
+  if (isCancel(selectedChats) || selectedChats.length === 0) {
+    cancel("No chats selected.");
+    return [];
+  }
+
+  return [...selectedChats];
 }
 
 export function isDirectCliExecution(argvPath: string | undefined, moduleUrl: string): boolean {
@@ -299,6 +313,7 @@ program
   .option("--limit <n>", "Limit the number of conversations considered", (value) => Number.parseInt(value, 10))
   .option("--verbose", "List every planned conversation")
   .option("--all", "Skip interactive selection and apply the command to every matching conversation")
+  .option("--include-subagents", "Include Codex subagent rollout sessions in selection and imports")
   .action(
     async (options: PullT3CliOptions) => {
       if (options.write && !options.database) {
@@ -307,6 +322,7 @@ program
 
       const config = await loadConfig();
       const selectedSourceConversationKeys = options.all ? undefined : await selectPullT3SourceKeys(config, options);
+      if (!options.all && selectedSourceConversationKeys?.length === 0) return;
       const result = await runPullT3(config, {
         ...pullT3OptionsFromCli(options),
         selectedSourceConversationKeys,

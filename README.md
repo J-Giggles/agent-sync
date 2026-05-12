@@ -147,6 +147,12 @@ Use filters to narrow the selector before exporting or importing:
 node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
 ```
 
+Codex subagent rollout sessions are hidden by default so the selector focuses on top-level chats. Include them explicitly when you want to inspect or import delegated subagent sessions:
+
+```bash
+node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --include-subagents
+```
+
 To hand selected projection data to another tool without writing to T3, export NDJSON:
 
 ```bash
@@ -169,6 +175,8 @@ node dist/src/cli.js pull:t3 --project agent-sync --write --database /tmp/t3-age
 Imported rows use deterministic `agent-sync:` IDs and metadata markers, so rerunning the command does not duplicate already-imported archive conversations.
 
 If the archive contains duplicate copies of the same provider conversation, for example T3 records synced from both `~/.t3/dev/state.sqlite` and `~/.t3/userdata/state.sqlite`, `pull:t3` collapses them by provider conversation id and reports the number of deduplicated archive copies.
+
+The interactive selector uses `@clack/prompts`, matching the prompt library used by the Lifepass E2E CLI.
 
 ## Public Repo Safety
 

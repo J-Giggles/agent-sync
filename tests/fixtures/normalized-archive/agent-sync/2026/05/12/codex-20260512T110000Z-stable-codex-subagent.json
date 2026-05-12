@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "provider": "codex",
+  "providerConversationId": "codex-subagent-1",
+  "stableId": "stable-codex-subagent",
+  "title": "Codex subagent fixture",
+  "project": {
+    "name": "agent-sync",
+    "root": "/work/agent-sync",
+    "matchedBy": "cwd"
+  },
+  "startedAt": "2026-05-12T11:00:00.000Z",
+  "updatedAt": "2026-05-12T11:05:00.000Z",
+  "source": {
+    "path": "/provider/codex/subagent.jsonl",
+    "kind": "jsonl"
+  },
+  "messages": [
+    {
+      "id": "u1",
+      "role": "user",
+      "createdAt": "2026-05-12T11:00:00.000Z",
+      "text": "Fixture subagent user message"
+    }
+  ],
+  "metadata": {
+    "raw": {
+      "source": {
+        "subagent": {
+          "thread_spawn": {
+            "parent_thread_id": "codex-original-1",
+            "depth": 1,
+            "agent_nickname": "Fermat",
+            "agent_role": "worker"
+          }
+        }
+      }
+    }
+  }
+}

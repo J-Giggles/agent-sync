@@ -79,6 +79,61 @@ describe("provider adapters", () => {
     expect(conversation.messages.map((message) => message.text)).toEqual(["codex rollout hello", "codex rollout response"]);
   });
 
+  it("codex provider preserves rollout subagent metadata without large instruction payloads", async () => {
+    const root = join(tmpdir(), `agent-sync-codex-subagent-${crypto.randomUUID()}`);
+    const sessionDir = join(root, "sessions", "2026", "05", "12");
+    const sessionPath = join(sessionDir, "rollout-2026-05-12T19-31-13-019e1d3e-2a52-7d30-a0de-cfa174119cf7.jsonl");
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(
+      sessionPath,
+      JSON.stringify({
+        timestamp: "2026-05-12T19:31:13.000Z",
+        type: "session_meta",
+        payload: {
+          id: "019e1d3e-2a52-7d30-a0de-cfa174119cf7",
+          cwd: "/work/app",
+          source: {
+            subagent: {
+              thread_spawn: {
+                parent_thread_id: "019e1d18-669d-7ef2-8321-234146880e59",
+                depth: 1,
+                agent_nickname: "Fermat",
+                agent_role: "worker",
+              },
+            },
+          },
+          thread_source: "subagent",
+          agent_nickname: "Fermat",
+          agent_role: "worker",
+          base_instructions: "do not archive this large prompt",
+        },
+      }) +
+        "\n" +
+        '{"timestamp":"2026-05-12T19:31:14.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"subagent task"}]}}\n'
+    );
+    const config = configWithProviderPath("codex", root);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.metadata.raw).toMatchObject({
+      source: {
+        subagent: {
+          thread_spawn: {
+            parent_thread_id: "019e1d18-669d-7ef2-8321-234146880e59",
+            depth: 1,
+            agent_nickname: "Fermat",
+            agent_role: "worker",
+          },
+        },
+      },
+      thread_source: "subagent",
+      agent_role: "worker",
+      agent_nickname: "Fermat",
+    });
+    expect(conversation.metadata.raw).not.toHaveProperty("base_instructions");
+  });
+
   it("expands configured tilde paths without reading real home provider directories", async () => {
     const previousHome = process.env.HOME;
     process.env.HOME = join(fixtureRoot, "home");

@@ -18,7 +18,10 @@ export type PullT3Options = {
   since?: string;
   limit?: number;
   selectedSourceConversationKeys?: string[];
+  includeSubagents?: boolean;
 };
+
+export type PullT3ConversationKind = "top-level" | "subagent";
 
 export type PullT3Item = {
   provider: string;
@@ -29,12 +32,17 @@ export type PullT3Item = {
   title: string;
   messageCount: number;
   alreadyImported: boolean;
+  kind: PullT3ConversationKind;
+  parentConversationId?: string;
+  agentRole?: string;
+  agentNickname?: string;
 };
 
 export type PullT3Result = {
   dryRun: boolean;
   planned: number;
   deduplicated: number;
+  omittedSubagents: number;
   imported: number;
   skipped: number;
   exported: number;
@@ -49,6 +57,10 @@ type ArchivedConversation = {
   conversation: NormalizedConversation;
   archivePath: string;
   projectName: string;
+  kind: PullT3ConversationKind;
+  parentConversationId?: string;
+  agentRole?: string;
+  agentNickname?: string;
 };
 
 type T3ProjectRow = {
@@ -145,6 +157,30 @@ function isNormalizedConversation(value: unknown): value is NormalizedConversati
   );
 }
 
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function subagentMetadata(conversation: NormalizedConversation): Pick<
+  ArchivedConversation,
+  "kind" | "parentConversationId" | "agentRole" | "agentNickname"
+> {
+  const raw = isRecord(conversation.metadata.raw) ? conversation.metadata.raw : undefined;
+  const source = raw && isRecord(raw.source) ? raw.source : undefined;
+  const subagent = source && isRecord(source.subagent) ? source.subagent : undefined;
+  const threadSpawn = subagent && isRecord(subagent.thread_spawn) ? subagent.thread_spawn : undefined;
+  const parentConversationId = stringValue(threadSpawn?.parent_thread_id);
+
+  if (!parentConversationId) return { kind: "top-level" };
+
+  return {
+    kind: "subagent",
+    parentConversationId,
+    agentRole: stringValue(threadSpawn?.agent_role),
+    agentNickname: stringValue(threadSpawn?.agent_nickname),
+  };
+}
+
 function normalizedTimestamp(value: string | undefined, fallback: string): string {
   if (value) {
     const parsed = new Date(value);
@@ -188,6 +224,7 @@ async function readArchivedConversations(config: SyncConfig): Promise<ArchivedCo
       conversation: parsed,
       archivePath,
       projectName: parsed.project?.name ?? projectFromArchivePath(archiveRoot, archivePath),
+      ...subagentMetadata(parsed),
     });
   }
 
@@ -198,6 +235,7 @@ async function readArchivedConversations(config: SyncConfig): Promise<ArchivedCo
       conversation: parsed,
       archivePath,
       projectName: parsed.project?.name ?? "unknown-project",
+      ...subagentMetadata(parsed),
     });
   }
 
@@ -209,15 +247,20 @@ async function readArchivedConversations(config: SyncConfig): Promise<ArchivedCo
   });
 }
 
-function filterArchived(archived: ArchivedConversation[], options: PullT3Options): ArchivedConversation[] {
+function filterArchived(archived: ArchivedConversation[], options: PullT3Options): { conversations: ArchivedConversation[]; omittedSubagents: number } {
   const sinceTime = options.since ? Date.parse(options.since) : undefined;
   if (sinceTime !== undefined && Number.isNaN(sinceTime)) {
     throw new Error(`Invalid --since date: ${options.since}`);
   }
 
-  const filtered = archived.filter(({ conversation, projectName }) => {
+  let omittedSubagents = 0;
+  const filtered = archived.filter(({ conversation, projectName, kind }) => {
     if (options.project && projectName !== options.project) return false;
     if (options.provider && conversation.provider !== options.provider) return false;
+    if (!options.includeSubagents && kind === "subagent") {
+      omittedSubagents += 1;
+      return false;
+    }
     if (
       options.selectedSourceConversationKeys &&
       !options.selectedSourceConversationKeys.includes(sourceConversationKey(conversation.provider, conversation.providerConversationId))
@@ -228,7 +271,10 @@ function filterArchived(archived: ArchivedConversation[], options: PullT3Options
     return true;
   });
 
-  return options.limit === undefined ? filtered : filtered.slice(0, options.limit);
+  return {
+    conversations: options.limit === undefined ? filtered : filtered.slice(0, options.limit),
+    omittedSubagents,
+  };
 }
 
 export function sourceConversationKey(provider: string, providerConversationId: string): string {
@@ -289,6 +335,10 @@ function metadataFor(archived: ArchivedConversation) {
     originalUpdatedAt: archived.conversation.updatedAt,
     providerConversationId: archived.conversation.providerConversationId,
     stableId: archived.conversation.stableId,
+    conversationKind: archived.kind,
+    parentConversationId: archived.parentConversationId,
+    agentRole: archived.agentRole,
+    agentNickname: archived.agentNickname,
   };
 }
 
@@ -468,7 +518,8 @@ async function exportRecords(exportPath: string, records: T3ImportRecord[]): Pro
 
 export async function runPullT3(config: SyncConfig, options: PullT3Options = {}): Promise<PullT3Result> {
   const dryRun = options.dryRun ?? true;
-  const deduped = deduplicateArchived(filterArchived(await readArchivedConversations(config), options));
+  const filtered = filterArchived(await readArchivedConversations(config), options);
+  const deduped = deduplicateArchived(filtered.conversations);
   const archived = deduped.conversations;
   const records = archived.map((item) => buildImportRecord(config, item));
   const databasePath = expandHomePath(options.databasePath ?? defaultT3DatabasePath);
@@ -481,6 +532,7 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
     dryRun,
     planned: records.length,
     deduplicated: deduped.deduplicated,
+    omittedSubagents: filtered.omittedSubagents,
     imported,
     skipped,
     exported,
@@ -493,6 +545,10 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
       title: record.thread.title,
       messageCount: record.messages.length,
       alreadyImported: existing.has(record.thread.thread_id),
+      kind: archived[index].kind,
+      parentConversationId: archived[index].parentConversationId,
+      agentRole: archived[index].agentRole,
+      agentNickname: archived[index].agentNickname,
     })),
   };
 }
@@ -519,6 +575,7 @@ export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Op
     `dry-run: ${result.dryRun}`,
     `planned: ${result.planned}`,
     `deduplicated archive copies: ${result.deduplicated}`,
+    `omitted subagents: ${result.omittedSubagents}`,
     `imported: ${result.imported}`,
     `skipped: ${result.skipped}`,
     `exported: ${result.exported}`,
@@ -536,7 +593,9 @@ export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Op
     lines.push("conversations:");
     for (const item of result.items) {
       const status = item.alreadyImported ? "already imported" : result.dryRun ? "would import" : "imported";
-      lines.push(`- ${status}: ${item.title} (${item.messageCount} messages, source ${item.providerConversationId})`);
+      const kind = item.kind === "subagent" ? `[subagent:${item.agentRole ?? "unknown"}] ` : "";
+      const parent = item.parentConversationId ? `, parent ${item.parentConversationId}` : "";
+      lines.push(`- ${status}: ${kind}${item.title} (${item.messageCount} messages, source ${item.providerConversationId}${parent})`);
     }
   } else {
     lines.push("Use --verbose to list every planned conversation.");

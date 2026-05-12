@@ -78,6 +78,45 @@ describe("runPullT3", () => {
         provider: "codex",
         project: "agent-sync",
         providerConversationId: "codex-original-1",
+        kind: "top-level",
+      })
+    );
+  });
+
+  it("hides subagent conversations by default", async () => {
+    const root = await makeTempRoot("agent-sync-t3-hide-subagents");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      project: "agent-sync",
+      provider: "codex",
+    });
+
+    expect(result.planned).toBe(1);
+    expect(result.omittedSubagents).toBe(1);
+    expect(result.items.map((item) => item.providerConversationId)).toEqual(["codex-original-1"]);
+  });
+
+  it("includes and labels subagent conversations when requested", async () => {
+    const root = await makeTempRoot("agent-sync-t3-include-subagents");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      project: "agent-sync",
+      provider: "codex",
+      includeSubagents: true,
+    });
+
+    expect(result.planned).toBe(2);
+    expect(result.omittedSubagents).toBe(0);
+    expect(result.items[1]).toEqual(
+      expect.objectContaining({
+        providerConversationId: "codex-subagent-1",
+        kind: "subagent",
+        parentConversationId: "codex-original-1",
+        agentRole: "worker",
       })
     );
   });
@@ -179,6 +218,7 @@ describe("runPullT3", () => {
         dryRun: true,
         planned: 2,
         deduplicated: 1,
+        omittedSubagents: 0,
         imported: 0,
         skipped: 0,
         exported: 0,
@@ -192,6 +232,7 @@ describe("runPullT3", () => {
             title: "[agent-sync] codex / agent-sync / 2026-05-12",
             messageCount: 2,
             alreadyImported: false,
+            kind: "top-level",
           },
           {
             provider: "claude-code",
@@ -202,6 +243,7 @@ describe("runPullT3", () => {
             title: "[agent-sync] claude-code / liftpass-online / 2026-05-08",
             messageCount: 1,
             alreadyImported: false,
+            kind: "top-level",
           },
         ],
       },
@@ -209,6 +251,7 @@ describe("runPullT3", () => {
     );
 
     expect(lines).toContain("deduplicated archive copies: 1");
+    expect(lines).toContain("omitted subagents: 0");
     expect(lines).toContain("by provider:");
     expect(lines).toContain("  - claude-code: 1 conversations, 1 messages");
     expect(lines).toContain("  - codex: 1 conversations, 2 messages");
@@ -221,6 +264,7 @@ describe("runPullT3", () => {
         dryRun: true,
         planned: 1,
         deduplicated: 0,
+        omittedSubagents: 0,
         imported: 0,
         skipped: 0,
         exported: 0,
@@ -234,13 +278,16 @@ describe("runPullT3", () => {
             title: "[agent-sync] codex / agent-sync / 2026-05-12",
             messageCount: 2,
             alreadyImported: false,
+            kind: "subagent",
+            parentConversationId: "parent-1",
+            agentRole: "worker",
           },
         ],
       },
       { verbose: true }
     );
 
-    expect(lines).toContain("- would import: [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1)");
+    expect(lines).toContain("- would import: [subagent:worker] [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1, parent parent-1)");
   });
 
   it("parses interactive number and range selections", () => {

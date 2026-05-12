@@ -26,6 +26,11 @@ function rolloutIdHint(path: string): string | undefined {
   return rolloutPattern.exec(basename(path))?.[1];
 }
 
+function stringField(record: JsonObject | undefined, field: string): string | undefined {
+  const value = record?.[field];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
 async function discoverCodexSessionRefs(config: SyncConfig): Promise<RawConversationRef[]> {
   const paths = config.providers.codex?.paths ?? defaultPaths;
   const refs = new Map<string, RawConversationRef>();
@@ -62,14 +67,11 @@ async function discoverCodexSessionRefs(config: SyncConfig): Promise<RawConversa
 function normalizeCodexRolloutRecords(records: unknown[], ref: RawConversationRef): unknown[] {
   const sessionMeta = records.find((record) => isObject(record) && record.type === "session_meta");
   const sessionPayload = isObject(sessionMeta) && isObject(sessionMeta.payload) ? sessionMeta.payload : undefined;
-  const cwd = typeof sessionPayload?.cwd === "string" ? sessionPayload.cwd : undefined;
-  const id = typeof sessionPayload?.id === "string" ? sessionPayload.id : ref.idHint;
+  const cwd = stringField(sessionPayload, "cwd");
+  const id = stringField(sessionPayload, "id") ?? ref.idHint;
   const timestamp =
-    typeof sessionPayload?.timestamp === "string"
-      ? sessionPayload.timestamp
-      : isObject(sessionMeta) && typeof sessionMeta.timestamp === "string"
-        ? sessionMeta.timestamp
-        : undefined;
+    stringField(sessionPayload, "timestamp") ??
+    (isObject(sessionMeta) && typeof sessionMeta.timestamp === "string" ? sessionMeta.timestamp : undefined);
   const messages = records.flatMap((record) => {
     if (!isObject(record) || !isObject(record.payload)) return [];
     if (record.type !== "response_item" || record.payload.type !== "message") return [];
@@ -91,6 +93,10 @@ function normalizeCodexRolloutRecords(records: unknown[], ref: RawConversationRe
       id,
       cwd,
       timestamp,
+      source: sessionPayload?.source,
+      thread_source: stringField(sessionPayload, "thread_source"),
+      agent_role: stringField(sessionPayload, "agent_role"),
+      agent_nickname: stringField(sessionPayload, "agent_nickname"),
       messages,
     },
   ];
