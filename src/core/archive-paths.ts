@@ -19,6 +19,10 @@ function slug(value: string): string {
 
 function dateParts(iso: string) {
   const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`Invalid conversation startedAt: ${iso}`);
+  }
+
   const year = String(date.getUTCFullYear());
   const month = pad(date.getUTCMonth() + 1);
   const day = pad(date.getUTCDate());

@@ -33,12 +33,29 @@ describe("archive paths", () => {
     expect(fingerprint({ b: 2, a: 1 })).toBe(fingerprint({ a: 1, b: 2 }));
   });
 
+  it("fingerprints undefined distinctly from null", () => {
+    expect(() => fingerprint(undefined)).not.toThrow();
+    expect(fingerprint(undefined)).not.toBe(fingerprint(null));
+  });
+
+  it("fingerprints arrays with undefined distinctly from empty arrays", () => {
+    expect(fingerprint([undefined])).not.toBe(fingerprint([]));
+  });
+
+  it("creates stable ids without delimiter collisions", () => {
+    expect(createStableId("a:b", "c", "d")).not.toBe(createStableId("a", "b:c", "d"));
+  });
+
   it("returns central and project targets for matched conversations", () => {
     const targets = archiveTargets(config, conversation);
 
     expect(targets.map((target) => target.jsonPath)).toEqual([
       "/sync/archive/my-app/2026/05/12/codex-20260512T103000Z-stable-abc.json",
       "/work/my-app/.agents/chats/2026/05/12/codex-20260512T103000Z-stable-abc.json",
+    ]);
+    expect(targets.map((target) => target.markdownPath)).toEqual([
+      "/sync/archive/my-app/2026/05/12/codex-20260512T103000Z-stable-abc.md",
+      "/work/my-app/.agents/chats/2026/05/12/codex-20260512T103000Z-stable-abc.md",
     ]);
   });
 
@@ -47,5 +64,12 @@ describe("archive paths", () => {
 
     expect(targets).toHaveLength(1);
     expect(targets[0].jsonPath).toBe("/sync/unknown-project/2026/05/12/codex-20260512T103000Z-stable-abc.json");
+    expect(targets[0].markdownPath).toBe("/sync/unknown-project/2026/05/12/codex-20260512T103000Z-stable-abc.md");
+  });
+
+  it("throws a clear error for invalid startedAt values", () => {
+    expect(() => archiveTargets(config, { ...conversation, startedAt: "not-a-date" })).toThrow(
+      "Invalid conversation startedAt: not-a-date",
+    );
   });
 });
