@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "../types.js";
-import { buildConversation, discoverJsonRefs, readJsonRecords } from "./generic-json.js";
+import { buildConversation, discoverJsonRefs, expandHomePaths, readJsonRecords } from "./generic-json.js";
 
 const defaultPaths = ["~/.config/cursor/chats", "~/.config/Cursor/User/globalStorage", "~/.cursor/plans"];
 
@@ -14,5 +14,5 @@ export const cursorProvider: ProviderAdapter = {
       workspaceField: "workspace",
     });
   },
-  watchPaths: (config) => config.providers.cursor?.paths ?? defaultPaths,
+  watchPaths: (config) => expandHomePaths(config.providers.cursor?.paths ?? defaultPaths),
 };

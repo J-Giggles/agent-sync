@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "../types.js";
-import { buildConversation, discoverJsonRefs, readJsonRecords } from "./generic-json.js";
+import { buildConversation, discoverJsonRefs, expandHomePaths, readJsonRecords } from "./generic-json.js";
 
 const defaultPaths = ["~/.config/t3code", "~/.config/t3code-dev"];
 
@@ -14,5 +14,5 @@ export const t3codeProvider: ProviderAdapter = {
       cwdField: "cwd",
     });
   },
-  watchPaths: (config) => config.providers.t3code?.paths ?? defaultPaths,
+  watchPaths: (config) => expandHomePaths(config.providers.t3code?.paths ?? defaultPaths),
 };

@@ -1,4 +1,5 @@
-import { utimes } from "node:fs/promises";
+import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claudeCodeProvider } from "../src/providers/claude-code.js";
@@ -59,6 +60,27 @@ describe("provider adapters", () => {
     }
   });
 
+  it("expands provider watch paths", () => {
+    const previousHome = process.env.HOME;
+    process.env.HOME = join(fixtureRoot, "home");
+
+    try {
+      const configured = codexProvider.watchPaths?.(configWithProviderPath("codex", "~/codex")) ?? [];
+      const defaults = codexProvider.watchPaths?.({
+        projectRoots: ["/work"],
+        centralArchiveDir: "/archive",
+        unknownProjectDir: "/unknown-project",
+        projectArchiveDir: ".agents/chats",
+        providers: { codex: { enabled: true } },
+      }) ?? [];
+
+      expect(configured).toEqual([join(fixtureRoot, "home", "codex")]);
+      expect(defaults).toEqual([join(fixtureRoot, "home", ".codex"), join(fixtureRoot, "home", ".codex", "sessions")]);
+    } finally {
+      process.env.HOME = previousHome;
+    }
+  });
+
   it("ignores non-conversation files under provider directories", async () => {
     const config = configWithProviderPath("codex", join(fixtureRoot, "codex"));
 
@@ -67,6 +89,21 @@ describe("provider adapters", () => {
     expect(refs.map((ref) => ref.path).sort()).toContain(join(fixtureRoot, "codex", "session.jsonl"));
     expect(refs.map((ref) => ref.path)).not.toContain(join(fixtureRoot, "codex", "auth.json"));
     expect(refs.map((ref) => ref.path)).not.toContain(join(fixtureRoot, "codex", "settings.json"));
+  });
+
+  it("does not follow symlinks out of provider directories", async () => {
+    const root = join(tmpdir(), `agent-sync-provider-${crypto.randomUUID()}`);
+    const external = join(tmpdir(), `agent-sync-external-${crypto.randomUUID()}`);
+    await mkdir(root, { recursive: true });
+    await mkdir(external, { recursive: true });
+    await writeFile(join(root, "session.jsonl"), '{"id":"m1","role":"user","content":"inside"}\n');
+    await writeFile(join(external, "session.jsonl"), '{"id":"m2","role":"user","content":"outside"}\n');
+    await symlink(external, join(root, "linked"));
+    const config = configWithProviderPath("codex", root);
+
+    const refs = await codexProvider.discover(config);
+
+    expect(refs.map((ref) => ref.path)).toEqual([join(root, "session.jsonl")]);
   });
 
   it("includes source path and line number for malformed JSONL errors", async () => {
@@ -89,6 +126,19 @@ describe("provider adapters", () => {
 
     expect(conversation.startedAt).toBe("2026-05-12T14:00:00.000Z");
     expect(conversation.updatedAt).toBe("2026-05-12T14:00:00.000Z");
+  });
+
+  it("uses source mtime when provider timestamps are invalid", async () => {
+    const path = join(fixtureRoot, "codex", "invalid-timestamp-session.jsonl");
+    const mtime = new Date("2026-05-12T16:00:00.000Z");
+    await utimes(path, mtime, mtime);
+    const config = configWithProviderPath("codex", path);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.startedAt).toBe("2026-05-12T16:00:00.000Z");
+    expect(conversation.updatedAt).toBe("2026-05-12T16:00:00.000Z");
   });
 
   it("chooses updatedAt from parseable timestamps by numeric time", async () => {

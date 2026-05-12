@@ -24,12 +24,17 @@ function stringField(value: unknown, field: string | undefined): string | undefi
   return typeof item === "string" && item.length > 0 ? item : undefined;
 }
 
+function validTimestamp(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return Number.isFinite(Date.parse(value)) ? value : undefined;
+}
+
 function timestampFrom(value: unknown): string | undefined {
   if (!isObject(value)) return undefined;
 
   for (const field of ["timestamp", "createdAt", "created_at", "time", "date"]) {
     const item = value[field];
-    if (typeof item === "string" && item.length > 0) return item;
+    if (typeof item === "string" && item.length > 0) return validTimestamp(item);
   }
 
   return undefined;
@@ -58,10 +63,14 @@ async function statIfAccessible(path: string) {
   }
 }
 
-function expandHomePath(path: string): string {
+export function expandHomePath(path: string): string {
   if (path === "~") return homedir();
   if (path.startsWith("~/")) return join(homedir(), path.slice(2));
   return path;
+}
+
+export function expandHomePaths(paths: string[]): string[] {
+  return paths.map((path) => expandHomePath(path));
 }
 
 export async function discoverJsonRefs(
@@ -81,6 +90,7 @@ export async function discoverJsonRefs(
       ? await fg(["**/*{chat,chats,conversation,conversations,session,sessions}*.{json,jsonl}"], {
           cwd: expandedPath,
           absolute: true,
+          followSymbolicLinks: false,
           onlyFiles: true,
         })
       : [expandedPath];
@@ -204,7 +214,7 @@ function latestParseableTimestamp(timestamps: Array<string | undefined>): string
 }
 
 function updateTimestampFrom(value: unknown): string | undefined {
-  return stringField(value, "updatedAt") ?? stringField(value, "updated_at");
+  return validTimestamp(stringField(value, "updatedAt") ?? stringField(value, "updated_at"));
 }
 
 export async function buildConversation(

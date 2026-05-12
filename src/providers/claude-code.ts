@@ -1,5 +1,5 @@
 import type { ProviderAdapter } from "../types.js";
-import { buildConversation, discoverJsonRefs, readJsonRecords } from "./generic-json.js";
+import { buildConversation, discoverJsonRefs, expandHomePaths, readJsonRecords } from "./generic-json.js";
 
 const defaultPaths = ["~/.claude", "~/.config/Claude/claude-code-sessions"];
 
@@ -13,5 +13,5 @@ export const claudeCodeProvider: ProviderAdapter = {
       cwdField: "cwd",
     });
   },
-  watchPaths: (config) => config.providers["claude-code"]?.paths ?? defaultPaths,
+  watchPaths: (config) => expandHomePaths(config.providers["claude-code"]?.paths ?? defaultPaths),
 };
