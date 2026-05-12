@@ -33,10 +33,15 @@ export type PullT3Item = {
 export type PullT3Result = {
   dryRun: boolean;
   planned: number;
+  deduplicated: number;
   imported: number;
   skipped: number;
   exported: number;
   items: PullT3Item[];
+};
+
+export type FormatPullT3Options = {
+  verbose?: boolean;
 };
 
 type ArchivedConversation = {
@@ -219,6 +224,43 @@ function filterArchived(archived: ArchivedConversation[], options: PullT3Options
   return options.limit === undefined ? filtered : filtered.slice(0, options.limit);
 }
 
+function dedupeKey(archived: ArchivedConversation): string {
+  return `${archived.conversation.provider}:${archived.conversation.providerConversationId}`;
+}
+
+function preferenceScore(archived: ArchivedConversation): number {
+  const updatedAt = Date.parse(archived.conversation.updatedAt ?? archived.conversation.startedAt);
+  const messageCount = archived.conversation.messages.length;
+  return (Number.isFinite(updatedAt) ? updatedAt : 0) + messageCount;
+}
+
+function preferArchiveCandidate(existing: ArchivedConversation, candidate: ArchivedConversation): ArchivedConversation {
+  const existingScore = preferenceScore(existing);
+  const candidateScore = preferenceScore(candidate);
+  if (candidateScore !== existingScore) return candidateScore > existingScore ? candidate : existing;
+  return candidate.archivePath.localeCompare(existing.archivePath) > 0 ? candidate : existing;
+}
+
+function deduplicateArchived(archived: ArchivedConversation[]): { conversations: ArchivedConversation[]; deduplicated: number } {
+  const bySourceConversation = new Map<string, ArchivedConversation>();
+
+  for (const conversation of archived) {
+    const key = dedupeKey(conversation);
+    const existing = bySourceConversation.get(key);
+    bySourceConversation.set(key, existing ? preferArchiveCandidate(existing, conversation) : conversation);
+  }
+
+  return {
+    conversations: [...bySourceConversation.values()].sort((a, b) => {
+      const aTime = Date.parse(a.conversation.startedAt);
+      const bTime = Date.parse(b.conversation.startedAt);
+      if (aTime !== bTime) return aTime - bTime;
+      return a.archivePath.localeCompare(b.archivePath);
+    }),
+    deduplicated: archived.length - bySourceConversation.size,
+  };
+}
+
 function latestUserMessageAt(messages: NormalizedMessage[]): string | null {
   return [...messages].reverse().find((message) => message.role === "user" && message.createdAt)?.createdAt ?? null;
 }
@@ -244,7 +286,7 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
   const metadata = metadataFor(archived);
   const createdAt = normalizedTimestamp(conversation.startedAt, new Date(0).toISOString());
   const updatedAt = normalizedTimestamp(conversation.updatedAt, createdAt);
-  const threadId = `agent-sync:${stableHash(`${conversation.provider}:${conversation.stableId}:${conversation.providerConversationId}`)}`;
+  const threadId = `agent-sync:${stableHash(`${conversation.provider}:${conversation.providerConversationId}`)}`;
   const projectId = `agent-sync:project:${stableHash(expandHomePath(config.centralArchiveDir))}`;
 
   return {
@@ -415,7 +457,8 @@ async function exportRecords(exportPath: string, records: T3ImportRecord[]): Pro
 
 export async function runPullT3(config: SyncConfig, options: PullT3Options = {}): Promise<PullT3Result> {
   const dryRun = options.dryRun ?? true;
-  const archived = filterArchived(await readArchivedConversations(config), options);
+  const deduped = deduplicateArchived(filterArchived(await readArchivedConversations(config), options));
+  const archived = deduped.conversations;
   const records = archived.map((item) => buildImportRecord(config, item));
   const databasePath = expandHomePath(options.databasePath ?? defaultT3DatabasePath);
   const existing = dryRun || records.length === 0 ? new Set<string>() : await existingThreadIds(databasePath, records.map((record) => record.thread.thread_id));
@@ -426,6 +469,7 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
   return {
     dryRun,
     planned: records.length,
+    deduplicated: deduped.deduplicated,
     imported,
     skipped,
     exported,
@@ -440,4 +484,52 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
       alreadyImported: existing.has(record.thread.thread_id),
     })),
   };
+}
+
+type SummaryGroup = {
+  conversations: number;
+  messages: number;
+};
+
+function groupedSummary(items: PullT3Item[], key: "provider" | "project"): Array<[string, SummaryGroup]> {
+  const groups = new Map<string, SummaryGroup>();
+  for (const item of items) {
+    const label = item[key];
+    const group = groups.get(label) ?? { conversations: 0, messages: 0 };
+    group.conversations += 1;
+    group.messages += item.messageCount;
+    groups.set(label, group);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Options = {}): string[] {
+  const lines = [
+    `dry-run: ${result.dryRun}`,
+    `planned: ${result.planned}`,
+    `deduplicated archive copies: ${result.deduplicated}`,
+    `imported: ${result.imported}`,
+    `skipped: ${result.skipped}`,
+    `exported: ${result.exported}`,
+    "by provider:",
+    ...groupedSummary(result.items, "provider").map(
+      ([provider, group]) => `  - ${provider}: ${group.conversations} conversations, ${group.messages} messages`
+    ),
+    "by project:",
+    ...groupedSummary(result.items, "project").map(
+      ([project, group]) => `  - ${project}: ${group.conversations} conversations, ${group.messages} messages`
+    ),
+  ];
+
+  if (options.verbose) {
+    lines.push("conversations:");
+    for (const item of result.items) {
+      const status = item.alreadyImported ? "already imported" : result.dryRun ? "would import" : "imported";
+      lines.push(`- ${status}: ${item.title} (${item.messageCount} messages, source ${item.providerConversationId})`);
+    }
+  } else {
+    lines.push("Use --verbose to list every planned conversation.");
+  }
+
+  return lines;
 }

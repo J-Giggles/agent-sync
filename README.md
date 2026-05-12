@@ -86,6 +86,9 @@ node dist/src/cli.js pull:t3 --dry-run
 # Narrow the preview before exporting or writing.
 node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
 
+# List every planned conversation instead of only grouped totals.
+node dist/src/cli.js pull:t3 --dry-run --verbose
+
 # Export a T3 projection import plan without touching the T3 database.
 node dist/src/cli.js pull:t3 --export ./t3-import.ndjson
 ```
@@ -158,6 +161,8 @@ node dist/src/cli.js pull:t3 --write --database /tmp/t3-agent-sync-test.sqlite -
 ```
 
 Imported rows use deterministic `agent-sync:` IDs and metadata markers, so rerunning the command does not duplicate already-imported archive conversations.
+
+If the archive contains duplicate copies of the same provider conversation, for example T3 records synced from both `~/.t3/dev/state.sqlite` and `~/.t3/userdata/state.sqlite`, `pull:t3` collapses them by provider conversation id and reports the number of deduplicated archive copies.
 
 ## Public Repo Safety
 

@@ -8,7 +8,7 @@ import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
-import { runPullT3 } from "./core/t3-import.js";
+import { formatPullT3Result, runPullT3 } from "./core/t3-import.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
 import { enabledProviders } from "./providers/index.js";
@@ -216,6 +216,7 @@ program
   .option("--provider <provider>", "Only include archive conversations from one provider")
   .option("--since <date>", "Only include conversations started at or after this date")
   .option("--limit <n>", "Limit the number of conversations considered", (value) => Number.parseInt(value, 10))
+  .option("--verbose", "List every planned conversation")
   .action(
     async (options: {
       dryRun?: boolean;
@@ -226,6 +227,7 @@ program
       provider?: string;
       since?: string;
       limit?: number;
+      verbose?: boolean;
     }) => {
       if (options.write && !options.database) {
         throw new Error("Refusing to write without an explicit --database path. Start with --dry-run or pass --database <copy-of-t3.sqlite>.");
@@ -242,15 +244,7 @@ program
         limit: options.limit,
       });
 
-      console.log(`dry-run: ${result.dryRun}`);
-      console.log(`planned: ${result.planned}`);
-      console.log(`imported: ${result.imported}`);
-      console.log(`skipped: ${result.skipped}`);
-      console.log(`exported: ${result.exported}`);
-      for (const item of result.items) {
-        const status = item.alreadyImported ? "already imported" : result.dryRun ? "would import" : "imported";
-        console.log(`- ${status}: ${item.title} (${item.messageCount} messages)`);
-      }
+      for (const line of formatPullT3Result(result, { verbose: options.verbose })) console.log(line);
     }
   );
 

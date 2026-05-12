@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { runPullT3 } from "../src/core/t3-import.js";
+import { formatPullT3Result, runPullT3 } from "../src/core/t3-import.js";
 import type { SyncConfig } from "../src/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -48,10 +48,12 @@ describe("runPullT3", () => {
     const threads = await sqliteRows(databasePath, "select thread_id from projection_threads");
 
     expect(result.dryRun).toBe(true);
-    expect(result.planned).toBe(2);
+    expect(result.planned).toBe(3);
+    expect(result.deduplicated).toBe(1);
     expect(result.imported).toBe(0);
     expect(result.skipped).toBe(0);
     expect(result.items.map((item) => item.title)).toEqual([
+      "[agent-sync] t3code / t3code / 2026-05-05",
       "[agent-sync] claude-code / liftpass-online / 2026-05-08",
       "[agent-sync] codex / agent-sync / 2026-05-12",
     ]);
@@ -92,12 +94,12 @@ describe("runPullT3", () => {
     const first = JSON.parse(lines[0]) as { type: string; thread: { title: string }; messages: unknown[] };
     const threads = await sqliteRows(databasePath, "select thread_id from projection_threads");
 
-    expect(result.exported).toBe(2);
+    expect(result.exported).toBe(3);
     expect(result.imported).toBe(0);
-    expect(lines).toHaveLength(2);
+    expect(lines).toHaveLength(3);
     expect(first.type).toBe("agent-sync.t3-import.v1");
-    expect(first.thread.title).toBe("[agent-sync] claude-code / liftpass-online / 2026-05-08");
-    expect(first.messages).toHaveLength(1);
+    expect(first.thread.title).toBe("[agent-sync] t3code / t3code / 2026-05-05");
+    expect(first.messages).toHaveLength(2);
     expect(threads).toEqual([]);
   });
 
@@ -122,15 +124,103 @@ describe("runPullT3", () => {
       "select thread_id, provider_name from projection_thread_sessions order by thread_id"
     );
 
-    expect(first.imported).toBe(2);
+    expect(first.imported).toBe(3);
     expect(first.skipped).toBe(0);
     expect(second.imported).toBe(0);
-    expect(second.skipped).toBe(2);
-    expect(threadRows).toHaveLength(2);
-    expect(messageRows).toHaveLength(3);
-    expect(sessionRows).toHaveLength(2);
+    expect(second.skipped).toBe(3);
+    expect(threadRows).toHaveLength(3);
+    expect(messageRows).toHaveLength(5);
+    expect(sessionRows).toHaveLength(3);
     expect(threadRows[0].thread_id).toMatch(/^agent-sync:/);
     expect(JSON.parse(threadRows[0].model_selection_json).agentSyncImport.sourceProvider).toBe("claude-code");
     expect(JSON.parse(messageRows[0].attachments_json).agentSyncImport.sourceArchivePath).toContain("archive");
+  });
+
+  it("deduplicates archive copies with the same provider conversation id", async () => {
+    const root = await makeTempRoot("agent-sync-t3-deduplicate");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, { dryRun: true, provider: "t3code" });
+
+    expect(result.planned).toBe(1);
+    expect(result.deduplicated).toBe(1);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        provider: "t3code",
+        providerConversationId: "t3-original-1",
+        messageCount: 2,
+      })
+    );
+    expect(result.items[0].sourceArchivePath).toContain("stable-t3-userdata");
+  });
+
+  it("formats dry-run output as a compact summary by default", () => {
+    const lines = formatPullT3Result(
+      {
+        dryRun: true,
+        planned: 2,
+        deduplicated: 1,
+        imported: 0,
+        skipped: 0,
+        exported: 0,
+        items: [
+          {
+            provider: "codex",
+            project: "agent-sync",
+            providerConversationId: "codex-original-1",
+            sourceArchivePath: "/archive/agent-sync/codex.json",
+            threadId: "agent-sync:codex",
+            title: "[agent-sync] codex / agent-sync / 2026-05-12",
+            messageCount: 2,
+            alreadyImported: false,
+          },
+          {
+            provider: "claude-code",
+            project: "liftpass-online",
+            providerConversationId: "claude-original-1",
+            sourceArchivePath: "/archive/liftpass-online/claude.json",
+            threadId: "agent-sync:claude",
+            title: "[agent-sync] claude-code / liftpass-online / 2026-05-08",
+            messageCount: 1,
+            alreadyImported: false,
+          },
+        ],
+      },
+      { verbose: false }
+    );
+
+    expect(lines).toContain("deduplicated archive copies: 1");
+    expect(lines).toContain("by provider:");
+    expect(lines).toContain("  - claude-code: 1 conversations, 1 messages");
+    expect(lines).toContain("  - codex: 1 conversations, 2 messages");
+    expect(lines).not.toContain("- would import: [agent-sync] codex / agent-sync / 2026-05-12 (2 messages)");
+  });
+
+  it("formats per-conversation dry-run output when verbose", () => {
+    const lines = formatPullT3Result(
+      {
+        dryRun: true,
+        planned: 1,
+        deduplicated: 0,
+        imported: 0,
+        skipped: 0,
+        exported: 0,
+        items: [
+          {
+            provider: "codex",
+            project: "agent-sync",
+            providerConversationId: "codex-original-1",
+            sourceArchivePath: "/archive/agent-sync/codex.json",
+            threadId: "agent-sync:codex",
+            title: "[agent-sync] codex / agent-sync / 2026-05-12",
+            messageCount: 2,
+            alreadyImported: false,
+          },
+        ],
+      },
+      { verbose: true }
+    );
+
+    expect(lines).toContain("- would import: [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1)");
   });
 });

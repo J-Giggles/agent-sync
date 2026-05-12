@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "provider": "t3code",
+  "providerConversationId": "t3-original-1",
+  "stableId": "stable-t3-userdata",
+  "title": "T3 fixture from userdata",
+  "project": {
+    "name": "t3code",
+    "root": "/work/t3code",
+    "matchedBy": "cwd"
+  },
+  "startedAt": "2026-05-05T10:00:00.000Z",
+  "updatedAt": "2026-05-05T10:06:00.000Z",
+  "source": {
+    "path": "/home/example/.t3/userdata/state.sqlite",
+    "kind": "sqlite"
+  },
+  "messages": [
+    {
+      "id": "u1",
+      "role": "user",
+      "createdAt": "2026-05-05T10:00:00.000Z",
+      "text": "Fixture T3 user message"
+    },
+    {
+      "id": "a1",
+      "role": "assistant",
+      "createdAt": "2026-05-05T10:01:00.000Z",
+      "text": "Fixture T3 assistant message"
+    }
+  ],
+  "metadata": {
+    "sqlitePath": "/home/example/.t3/userdata/state.sqlite"
+  }
+}
