@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readdir, readFile } from "node:fs/promises";
+import { realpathSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
@@ -166,6 +167,16 @@ async function printStatus(config: SyncConfig): Promise<void> {
   }
 }
 
+export function isDirectCliExecution(argvPath: string | undefined, moduleUrl: string): boolean {
+  if (!argvPath) return false;
+
+  try {
+    return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return argvPath === fileURLToPath(moduleUrl);
+  }
+}
+
 program.name("agent-sync").description("Sync local agent chat histories").version("0.1.0");
 
 program.command("sync").description("Run one-shot chat sync").action(async () => {
@@ -197,6 +208,6 @@ program.command("doctor").description("Check provider and archive configuration"
   }
 });
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  program.parse();
+if (isDirectCliExecution(process.argv[1], import.meta.url)) {
+  await program.parseAsync();
 }

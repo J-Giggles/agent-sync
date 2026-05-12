@@ -1,8 +1,8 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { readStatus } from "../src/cli.js";
+import { isDirectCliExecution, readStatus } from "../src/cli.js";
 import type { SyncConfig } from "../src/types.js";
 
 function configWithArchive(archive: string): SyncConfig {
@@ -123,5 +123,18 @@ describe("readStatus", () => {
     expect(lines).toContain("latest synced conversations:");
     expect(lines).toContain(outputPath);
     expect(lines).toContain("unknown-project archive files: 2");
+  });
+});
+
+describe("isDirectCliExecution", () => {
+  it("treats symlinks to the CLI module as direct execution", async () => {
+    const root = join(tmpdir(), `agent-sync-cli-entry-${crypto.randomUUID()}`);
+    const realCli = join(root, "cli.js");
+    const linkedCli = join(root, "agent-sync");
+    await mkdir(root, { recursive: true });
+    await writeFile(realCli, "#!/usr/bin/env node\n");
+    await symlink(realCli, linkedCli);
+
+    expect(isDirectCliExecution(linkedCli, `file://${realCli}`)).toBe(true);
   });
 });
