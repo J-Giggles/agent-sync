@@ -4,6 +4,6 @@
   "workspace": "/work/app",
   "createdAt": "2026-05-12T12:00:00.000Z",
   "messages": [
-    { "id": "m1", "role": "user", "text": "cursor hello" }
+    { "id": "m1", "role": "user", "message": { "content": "cursor hello" } }
   ]
 }

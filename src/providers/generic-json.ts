@@ -1,4 +1,4 @@
-import { readFile, stat } from "node:fs/promises";
+import { lstat, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { basename, extname, join } from "node:path";
 import fg from "fast-glob";
@@ -24,9 +24,24 @@ function stringField(value: unknown, field: string | undefined): string | undefi
   return typeof item === "string" && item.length > 0 ? item : undefined;
 }
 
-function validTimestamp(value: string | undefined): string | undefined {
-  if (!value) return undefined;
-  return Number.isFinite(Date.parse(value)) ? value : undefined;
+function validTimestamp(value: unknown): string | undefined {
+  if (typeof value === "string") {
+    if (value.length === 0) return undefined;
+
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return undefined;
+
+    const canonical = date.toISOString();
+    return canonical === value ? canonical : undefined;
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const milliseconds = value < 1e12 ? value * 1000 : value;
+    const date = new Date(milliseconds);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+  }
+
+  return undefined;
 }
 
 function timestampFrom(value: unknown): string | undefined {
@@ -34,7 +49,8 @@ function timestampFrom(value: unknown): string | undefined {
 
   for (const field of ["timestamp", "createdAt", "created_at", "time", "date"]) {
     const item = value[field];
-    if (typeof item === "string" && item.length > 0) return validTimestamp(item);
+    const timestamp = validTimestamp(item);
+    if (timestamp) return timestamp;
   }
 
   return undefined;
@@ -55,9 +71,9 @@ function sourceKindForPath(path: string): RawConversationRef["kind"] {
   return extname(path).toLowerCase() === ".jsonl" ? "jsonl" : "json";
 }
 
-async function statIfAccessible(path: string) {
+async function lstatIfAccessible(path: string) {
   try {
-    return await stat(path);
+    return await lstat(path);
   } catch {
     return undefined;
   }
@@ -83,8 +99,9 @@ export async function discoverJsonRefs(
 
   for (const path of paths) {
     const expandedPath = expandHomePath(path);
-    const pathStat = await statIfAccessible(expandedPath);
+    const pathStat = await lstatIfAccessible(expandedPath);
     if (!pathStat) continue;
+    if (pathStat.isSymbolicLink()) continue;
 
     const files = pathStat.isDirectory()
       ? await fg(["**/*{chat,chats,conversation,conversations,session,sessions}*.{json,jsonl}"], {
@@ -214,7 +231,8 @@ function latestParseableTimestamp(timestamps: Array<string | undefined>): string
 }
 
 function updateTimestampFrom(value: unknown): string | undefined {
-  return validTimestamp(stringField(value, "updatedAt") ?? stringField(value, "updated_at"));
+  if (!isObject(value)) return undefined;
+  return validTimestamp(value.updatedAt) ?? validTimestamp(value.updated_at);
 }
 
 export async function buildConversation(
@@ -262,6 +280,7 @@ export async function buildConversation(
         conversationTimestamp,
         updateTimestampFrom(conversation),
         ...messages.map((message) => message.createdAt),
+        ...messageRecords.map((message) => updateTimestampFrom(message)),
       ]) ?? sourceMtime,
     source: {
       path: ref.path,

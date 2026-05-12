@@ -1,0 +1,2 @@
+{"id":"m1","role":"user","content":"numeric timestamp","timestamp":1778608800,"cwd":"/work/app"}
+{"id":"m2","role":"assistant","content":"numeric updated","updatedAt":1778608860000,"cwd":"/work/app"}

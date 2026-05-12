@@ -106,6 +106,21 @@ describe("provider adapters", () => {
     expect(refs.map((ref) => ref.path)).toEqual([join(root, "session.jsonl")]);
   });
 
+  it("skips configured provider roots that are symlinks", async () => {
+    const root = join(tmpdir(), `agent-sync-provider-root-${crypto.randomUUID()}`);
+    const external = join(tmpdir(), `agent-sync-external-root-${crypto.randomUUID()}`);
+    await mkdir(root, { recursive: true });
+    await mkdir(external, { recursive: true });
+    await writeFile(join(external, "session.jsonl"), '{"id":"m1","role":"user","content":"outside"}\n');
+    const linkedRoot = join(root, "linked-root");
+    await symlink(external, linkedRoot);
+    const config = configWithProviderPath("codex", linkedRoot);
+
+    const refs = await codexProvider.discover(config);
+
+    expect(refs).toEqual([]);
+  });
+
   it("includes source path and line number for malformed JSONL errors", async () => {
     const path = join(fixtureRoot, "codex", "bad-session.jsonl");
     const config = configWithProviderPath("codex", path);
@@ -139,6 +154,31 @@ describe("provider adapters", () => {
 
     expect(conversation.startedAt).toBe("2026-05-12T16:00:00.000Z");
     expect(conversation.updatedAt).toBe("2026-05-12T16:00:00.000Z");
+  });
+
+  it("uses source mtime when provider timestamps are impossible dates", async () => {
+    const path = join(fixtureRoot, "codex", "impossible-timestamp-session.jsonl");
+    const mtime = new Date("2026-05-12T17:00:00.000Z");
+    await utimes(path, mtime, mtime);
+    const config = configWithProviderPath("codex", path);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.startedAt).toBe("2026-05-12T17:00:00.000Z");
+    expect(conversation.updatedAt).toBe("2026-05-12T17:00:00.000Z");
+  });
+
+  it("normalizes numeric provider timestamps from seconds and milliseconds", async () => {
+    const path = join(fixtureRoot, "codex", "numeric-timestamp-session.jsonl");
+    const config = configWithProviderPath("codex", path);
+
+    const refs = await codexProvider.discover(config);
+    const conversation = await codexProvider.read(refs[0]);
+
+    expect(conversation.startedAt).toBe("2026-05-12T18:00:00.000Z");
+    expect(conversation.updatedAt).toBe("2026-05-12T18:01:00.000Z");
+    expect(conversation.messages[0].createdAt).toBe("2026-05-12T18:00:00.000Z");
   });
 
   it("chooses updatedAt from parseable timestamps by numeric time", async () => {
