@@ -30,6 +30,7 @@ export type PullT3Item = {
   sourceArchivePath: string;
   threadId: string;
   title: string;
+  chatLabel: string;
   messageCount: number;
   alreadyImported: boolean;
   kind: PullT3ConversationKind;
@@ -331,8 +332,56 @@ function latestUserMessageAt(messages: NormalizedMessage[]): string | null {
   return [...messages].reverse().find((message) => message.role === "user" && message.createdAt)?.createdAt ?? null;
 }
 
+function cleanChatLabelCandidate(value: string): string | undefined {
+  const withoutCodeBlocks = value.replace(/```[\s\S]*?```/g, " ");
+  const line = withoutCodeBlocks
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.length > 0 && !item.startsWith("<") && !item.startsWith("{") && item !== "```");
+  if (!line) return undefined;
+
+  const cleaned = line
+    .replace(/^#+\s*/, "")
+    .replace(/^[-*]\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length === 0) return undefined;
+
+  if (cleaned.length <= 72) return cleaned;
+
+  const clipped = cleaned.slice(0, 72);
+  return clipped.replace(/\s+\S*$/, "").trim() || clipped.trim();
+}
+
+function isBoilerplateChatLabel(value: string): boolean {
+  return [
+    /^agents\.md instructions\b/i,
+    /^you are working in\b/i,
+    /^you write concise thread titles\b/i,
+    /^knowledge cutoff\b/i,
+    /^current date\b/i,
+    /^goal:\s/i,
+    /^important privacy constraint\b/i,
+  ].some((pattern) => pattern.test(value));
+}
+
+function chatLabelFor(conversation: NormalizedConversation): string {
+  const userLabels = conversation.messages
+    .filter((message) => message.role === "user")
+    .map((message) => (message.text ? cleanChatLabelCandidate(message.text) : undefined))
+    .filter((label): label is string => Boolean(label));
+  const userMessage = userLabels.find((label) => !isBoilerplateChatLabel(label)) ?? userLabels[0];
+  if (userMessage) return userMessage;
+
+  const titled = conversation.title ? cleanChatLabelCandidate(conversation.title) : undefined;
+  if (titled) return titled;
+
+  const anyMessage = conversation.messages.map((message) => (message.text ? cleanChatLabelCandidate(message.text) : undefined)).find(Boolean);
+  return anyMessage ?? "Untitled chat";
+}
+
 function titleFor(conversation: NormalizedConversation, projectName: string): string {
-  return `[agent-sync] ${conversation.provider} / ${projectName} / ${conversation.startedAt.slice(0, 10)}`;
+  return `[agent-sync] ${conversation.provider} / ${projectName} / ${conversation.startedAt.slice(0, 10)} / ${chatLabelFor(conversation)}`;
 }
 
 function metadataFor(archived: ArchivedConversation) {
@@ -344,6 +393,7 @@ function metadataFor(archived: ArchivedConversation) {
     originalUpdatedAt: archived.conversation.updatedAt,
     providerConversationId: archived.conversation.providerConversationId,
     stableId: archived.conversation.stableId,
+    chatLabel: chatLabelFor(archived.conversation),
     conversationKind: archived.kind,
     parentConversationId: archived.parentConversationId,
     agentRole: archived.agentRole,
@@ -554,6 +604,7 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
       sourceArchivePath: archived[index].archivePath,
       threadId: record.thread.thread_id,
       title: record.thread.title,
+      chatLabel: chatLabelFor(archived[index].conversation),
       messageCount: record.messages.length,
       alreadyImported: existing.has(record.thread.thread_id),
       kind: archived[index].kind,

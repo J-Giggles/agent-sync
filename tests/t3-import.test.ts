@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { cp, mkdir, readFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -53,9 +53,9 @@ describe("runPullT3", () => {
     expect(result.imported).toBe(0);
     expect(result.skipped).toBe(0);
     expect(result.items.map((item) => item.title)).toEqual([
-      "[agent-sync] t3code / t3code / 2026-05-05",
-      "[agent-sync] claude-code / liftpass-online / 2026-05-08",
-      "[agent-sync] codex / agent-sync / 2026-05-12",
+      "[agent-sync] t3code / t3code / 2026-05-05 / Fixture T3 user message",
+      "[agent-sync] claude-code / liftpass-online / 2026-05-08 / Fixture Claude user message",
+      "[agent-sync] codex / agent-sync / 2026-05-12 / Fixture user message",
     ]);
     expect(threads).toEqual([]);
   });
@@ -79,6 +79,93 @@ describe("runPullT3", () => {
         project: "agent-sync",
         providerConversationId: "codex-original-1",
         kind: "top-level",
+        chatLabel: "Fixture user message",
+      })
+    );
+  });
+
+  it("generates a stable short chat label from the first meaningful user message", async () => {
+    const root = await makeTempRoot("agent-sync-t3-label");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      project: "t3code",
+      provider: "t3code",
+    });
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        chatLabel: "Fixture T3 user message",
+        title: "[agent-sync] t3code / t3code / 2026-05-05 / Fixture T3 user message",
+      })
+    );
+  });
+
+  it("skips setup boilerplate when generating chat labels", async () => {
+    const root = await makeTempRoot("agent-sync-t3-label-boilerplate");
+    const config = await fixtureConfig(root);
+    const fixturePath = join(
+      config.centralArchiveDir,
+      "label-project",
+      "2026",
+      "05",
+      "12",
+      "codex-20260512T120000Z-stable-label.json"
+    );
+    await mkdir(join(config.centralArchiveDir, "label-project", "2026", "05", "12"), { recursive: true });
+    await writeFile(
+      fixturePath,
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          provider: "codex",
+          providerConversationId: "codex-label-1",
+          stableId: "stable-label",
+          project: {
+            name: "label-project",
+            root: "/work/label-project",
+            matchedBy: "cwd",
+          },
+          startedAt: "2026-05-12T12:00:00.000Z",
+          updatedAt: "2026-05-12T12:05:00.000Z",
+          source: {
+            path: "/provider/codex/label.jsonl",
+            kind: "jsonl",
+          },
+          messages: [
+            {
+              id: "setup",
+              role: "user",
+              createdAt: "2026-05-12T12:00:00.000Z",
+              text: "# AGENTS.md instructions for /work/label-project",
+            },
+            {
+              id: "request",
+              role: "user",
+              createdAt: "2026-05-12T12:01:00.000Z",
+              text: "Please build generated chat labels for the selector",
+            },
+          ],
+          metadata: {
+            cwd: "/work/label-project",
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      project: "label-project",
+      provider: "codex",
+    });
+
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        chatLabel: "Please build generated chat labels for the selector",
+        title: "[agent-sync] codex / label-project / 2026-05-12 / Please build generated chat labels for the selector",
       })
     );
   });
@@ -135,7 +222,7 @@ describe("runPullT3", () => {
       expect.objectContaining({
         provider: "codex",
         providerConversationId: "codex-original-1",
-        title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        title: "[agent-sync] codex / agent-sync / 2026-05-12 / Fixture user message",
       })
     );
   });
@@ -156,7 +243,7 @@ describe("runPullT3", () => {
     expect(result.imported).toBe(0);
     expect(lines).toHaveLength(3);
     expect(first.type).toBe("agent-sync.t3-import.v1");
-    expect(first.thread.title).toBe("[agent-sync] t3code / t3code / 2026-05-05");
+    expect(first.thread.title).toBe("[agent-sync] t3code / t3code / 2026-05-05 / Fixture T3 user message");
     expect(first.messages).toHaveLength(2);
     expect(threads).toEqual([]);
   });
@@ -230,6 +317,7 @@ describe("runPullT3", () => {
             sourceArchivePath: "/archive/agent-sync/codex.json",
             threadId: "agent-sync:codex",
             title: "[agent-sync] codex / agent-sync / 2026-05-12",
+            chatLabel: "Fixture user message",
             messageCount: 2,
             alreadyImported: false,
             kind: "top-level",
@@ -241,6 +329,7 @@ describe("runPullT3", () => {
             sourceArchivePath: "/archive/liftpass-online/claude.json",
             threadId: "agent-sync:claude",
             title: "[agent-sync] claude-code / liftpass-online / 2026-05-08",
+            chatLabel: "Fixture Claude user message",
             messageCount: 1,
             alreadyImported: false,
             kind: "top-level",
@@ -276,6 +365,7 @@ describe("runPullT3", () => {
             sourceArchivePath: "/archive/agent-sync/codex.json",
             threadId: "agent-sync:codex",
             title: "[agent-sync] codex / agent-sync / 2026-05-12",
+            chatLabel: "Fixture user message",
             messageCount: 2,
             alreadyImported: false,
             kind: "subagent",
@@ -302,6 +392,7 @@ describe("runPullT3", () => {
         sourceArchivePath: "/archive/agent-sync/codex.json",
         threadId: "agent-sync:codex",
         title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        chatLabel: "Fixture user message",
         messageCount: 2,
         alreadyImported: false,
         kind: "top-level" as const,
@@ -316,6 +407,7 @@ describe("runPullT3", () => {
         sourceArchivePath: "/archive/agent-sync/codex-subagent.json",
         threadId: "agent-sync:codex-subagent",
         title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        chatLabel: "Fixture subagent user message",
         messageCount: 2,
         alreadyImported: false,
         kind: "subagent" as const,
@@ -328,6 +420,7 @@ describe("runPullT3", () => {
         sourceArchivePath: "/archive/agent-sync/codex-subagent-2.json",
         threadId: "agent-sync:codex-subagent-2",
         title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        chatLabel: "Fixture subagent user message 2",
         messageCount: 3,
         alreadyImported: false,
         kind: "subagent" as const,
