@@ -8,6 +8,7 @@ import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
+import { runPullT3 } from "./core/t3-import.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
 import { enabledProviders } from "./providers/index.js";
@@ -203,6 +204,55 @@ program.command("status").description("Show sync status").action(async () => {
   const config = await loadConfig();
   await printStatus(config);
 });
+
+program
+  .command("pull:t3")
+  .description("Preview, export, or import normalized archive conversations into T3 projection tables")
+  .option("--dry-run", "Preview planned imports without writing to T3", true)
+  .option("--write", "Write to the configured T3 SQLite database")
+  .option("--database <path>", "T3 SQLite database path", "~/.t3/userdata/state.sqlite")
+  .option("--export <path>", "Write planned imports as NDJSON without requiring T3 to consume them")
+  .option("--project <name>", "Only include archive conversations for one project")
+  .option("--provider <provider>", "Only include archive conversations from one provider")
+  .option("--since <date>", "Only include conversations started at or after this date")
+  .option("--limit <n>", "Limit the number of conversations considered", (value) => Number.parseInt(value, 10))
+  .action(
+    async (options: {
+      dryRun?: boolean;
+      write?: boolean;
+      database?: string;
+      export?: string;
+      project?: string;
+      provider?: string;
+      since?: string;
+      limit?: number;
+    }) => {
+      if (options.write && !options.database) {
+        throw new Error("Refusing to write without an explicit --database path. Start with --dry-run or pass --database <copy-of-t3.sqlite>.");
+      }
+
+      const config = await loadConfig();
+      const result = await runPullT3(config, {
+        dryRun: options.write ? false : options.dryRun ?? true,
+        databasePath: options.database,
+        exportPath: options.export,
+        project: options.project,
+        provider: options.provider,
+        since: options.since,
+        limit: options.limit,
+      });
+
+      console.log(`dry-run: ${result.dryRun}`);
+      console.log(`planned: ${result.planned}`);
+      console.log(`imported: ${result.imported}`);
+      console.log(`skipped: ${result.skipped}`);
+      console.log(`exported: ${result.exported}`);
+      for (const item of result.items) {
+        const status = item.alreadyImported ? "already imported" : result.dryRun ? "would import" : "imported";
+        console.log(`- ${status}: ${item.title} (${item.messageCount} messages)`);
+      }
+    }
+  );
 
 program
   .command("doctor")

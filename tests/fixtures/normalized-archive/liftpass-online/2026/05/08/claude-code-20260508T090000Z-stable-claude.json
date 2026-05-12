@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "provider": "claude-code",
+  "providerConversationId": "claude-original-1",
+  "stableId": "stable-claude",
+  "title": "Claude fixture",
+  "project": {
+    "name": "liftpass-online",
+    "root": "/work/liftpass-online",
+    "matchedBy": "cwd"
+  },
+  "startedAt": "2026-05-08T09:00:00.000Z",
+  "updatedAt": "2026-05-08T09:10:00.000Z",
+  "source": {
+    "path": "/provider/claude/session.jsonl",
+    "kind": "jsonl"
+  },
+  "messages": [
+    {
+      "id": "u1",
+      "role": "user",
+      "createdAt": "2026-05-08T09:00:00.000Z",
+      "text": "Fixture Claude user message"
+    }
+  ],
+  "metadata": {
+    "cwd": "/work/liftpass-online"
+  }
+}

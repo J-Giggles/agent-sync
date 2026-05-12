@@ -1,0 +1,136 @@
+import { execFile } from "node:child_process";
+import { cp, mkdir, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { promisify } from "node:util";
+import { randomUUID } from "node:crypto";
+import { describe, expect, it } from "vitest";
+import { runPullT3 } from "../src/core/t3-import.js";
+import type { SyncConfig } from "../src/types.js";
+
+const execFileAsync = promisify(execFile);
+
+async function makeTempRoot(name: string): Promise<string> {
+  const root = join(tmpdir(), `${name}-${randomUUID()}`);
+  await mkdir(root, { recursive: true });
+  return root;
+}
+
+async function createFixtureDatabase(path: string): Promise<void> {
+  await execFileAsync("sqlite3", [path, `.read ${join(process.cwd(), "tests/fixtures/t3/projection-schema.sql")}`]);
+}
+
+async function sqliteRows<T>(databasePath: string, sql: string): Promise<T[]> {
+  const { stdout } = await execFileAsync("sqlite3", ["-json", databasePath, sql]);
+  return stdout.trim() ? (JSON.parse(stdout) as T[]) : [];
+}
+
+async function fixtureConfig(root: string): Promise<SyncConfig> {
+  const archive = join(root, "archive");
+  await cp(join(process.cwd(), "tests/fixtures/normalized-archive"), archive, { recursive: true });
+  return {
+    projectRoots: [join(root, "projects")],
+    centralArchiveDir: archive,
+    unknownProjectDir: join(root, "unknown-project"),
+    projectArchiveDir: ".agents/chats",
+    providers: {},
+  };
+}
+
+describe("runPullT3", () => {
+  it("dry-runs by default without writing to the T3 projection database", async () => {
+    const root = await makeTempRoot("agent-sync-t3-dry-run");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    await createFixtureDatabase(databasePath);
+
+    const result = await runPullT3(config, { databasePath });
+    const threads = await sqliteRows(databasePath, "select thread_id from projection_threads");
+
+    expect(result.dryRun).toBe(true);
+    expect(result.planned).toBe(2);
+    expect(result.imported).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.items.map((item) => item.title)).toEqual([
+      "[agent-sync] claude-code / liftpass-online / 2026-05-08",
+      "[agent-sync] codex / agent-sync / 2026-05-12",
+    ]);
+    expect(threads).toEqual([]);
+  });
+
+  it("filters archive conversations by project provider since and limit", async () => {
+    const root = await makeTempRoot("agent-sync-t3-filter");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      project: "agent-sync",
+      provider: "codex",
+      since: "2026-05-12",
+      limit: 1,
+    });
+
+    expect(result.planned).toBe(1);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        provider: "codex",
+        project: "agent-sync",
+        providerConversationId: "codex-original-1",
+      })
+    );
+  });
+
+  it("exports planned imports as NDJSON without writing to the database", async () => {
+    const root = await makeTempRoot("agent-sync-t3-export");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    const exportPath = join(root, "t3-import.ndjson");
+    await createFixtureDatabase(databasePath);
+
+    const result = await runPullT3(config, { databasePath, exportPath });
+    const lines = (await readFile(exportPath, "utf8")).trim().split("\n");
+    const first = JSON.parse(lines[0]) as { type: string; thread: { title: string }; messages: unknown[] };
+    const threads = await sqliteRows(databasePath, "select thread_id from projection_threads");
+
+    expect(result.exported).toBe(2);
+    expect(result.imported).toBe(0);
+    expect(lines).toHaveLength(2);
+    expect(first.type).toBe("agent-sync.t3-import.v1");
+    expect(first.thread.title).toBe("[agent-sync] claude-code / liftpass-online / 2026-05-08");
+    expect(first.messages).toHaveLength(1);
+    expect(threads).toEqual([]);
+  });
+
+  it("imports idempotently and does not duplicate threads or messages", async () => {
+    const root = await makeTempRoot("agent-sync-t3-import");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    await createFixtureDatabase(databasePath);
+
+    const first = await runPullT3(config, { databasePath, dryRun: false });
+    const second = await runPullT3(config, { databasePath, dryRun: false });
+    const threadRows = await sqliteRows<{ thread_id: string; title: string; model_selection_json: string }>(
+      databasePath,
+      "select thread_id, title, model_selection_json from projection_threads order by title"
+    );
+    const messageRows = await sqliteRows<{ message_id: string; attachments_json: string }>(
+      databasePath,
+      "select message_id, attachments_json from projection_thread_messages order by message_id"
+    );
+    const sessionRows = await sqliteRows<{ thread_id: string; provider_name: string }>(
+      databasePath,
+      "select thread_id, provider_name from projection_thread_sessions order by thread_id"
+    );
+
+    expect(first.imported).toBe(2);
+    expect(first.skipped).toBe(0);
+    expect(second.imported).toBe(0);
+    expect(second.skipped).toBe(2);
+    expect(threadRows).toHaveLength(2);
+    expect(messageRows).toHaveLength(3);
+    expect(sessionRows).toHaveLength(2);
+    expect(threadRows[0].thread_id).toMatch(/^agent-sync:/);
+    expect(JSON.parse(threadRows[0].model_selection_json).agentSyncImport.sourceProvider).toBe("claude-code");
+    expect(JSON.parse(messageRows[0].attachments_json).agentSyncImport.sourceArchivePath).toContain("archive");
+  });
+});

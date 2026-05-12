@@ -8,14 +8,14 @@
 Add a local-only `agent-sync pull:t3` command that previews, exports, and safely imports normalized archive conversations into a T3-compatible projection database without committing private chat data.
 
 ## Plan
-- [ ] Inspect T3 projection schema metadata without printing message text.
-- [ ] Add fixture normalized archive conversations and a fixture T3-style SQLite database for tests.
-- [ ] Write failing tests for dry-run summary, archive filtering, export output, idempotent SQLite import, and duplicate prevention.
-- [ ] Implement archive discovery and filtering from the central normalized archive.
-- [ ] Implement T3 projection import planning, deterministic IDs, metadata markers, dry-run default behavior, and NDJSON export.
-- [ ] Wire the `pull:t3` CLI command and document safe usage.
-- [ ] Run `npm run typecheck`, `npm test`, and `npm run build`.
-- [ ] Commit the completed implementation on `staging` without generated chat archives or provider data.
+- [x] Inspect T3 projection schema metadata without printing message text.
+- [x] Add fixture normalized archive conversations and a fixture T3-style SQLite database for tests.
+- [x] Write failing tests for dry-run summary, archive filtering, export output, idempotent SQLite import, and duplicate prevention.
+- [x] Implement archive discovery and filtering from the central normalized archive.
+- [x] Implement T3 projection import planning, deterministic IDs, metadata markers, dry-run default behavior, and NDJSON export.
+- [x] Wire the `pull:t3` CLI command and document safe usage.
+- [x] Run `npm run typecheck`, `npm test`, and `npm run build`.
+- [x] Commit the completed implementation on `staging` without generated chat archives or provider data.
 
 ## Acceptance criteria
 - `agent-sync pull:t3 --dry-run` reads the normalized central archive and reports planned imports without writing to T3.

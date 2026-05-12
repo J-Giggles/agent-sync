@@ -21,6 +21,7 @@ node dist/src/cli.js doctor
 node dist/src/cli.js status
 node dist/src/cli.js sync
 node dist/src/cli.js watch
+node dist/src/cli.js pull:t3 --dry-run
 ```
 
 During development, you can also use:
@@ -78,6 +79,15 @@ node dist/src/cli.js sync
 
 # Watch enabled provider paths and sync changed providers after a short debounce.
 node dist/src/cli.js watch
+
+# Preview normalized archive conversations that could be surfaced in T3.
+node dist/src/cli.js pull:t3 --dry-run
+
+# Narrow the preview before exporting or writing.
+node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
+
+# Export a T3 projection import plan without touching the T3 database.
+node dist/src/cli.js pull:t3 --export ./t3-import.ndjson
 ```
 
 ## Archive Layout
@@ -119,6 +129,35 @@ Before writing matched conversations into a project archive, `agent-sync` ensure
 To pre-create those guards without scanning or syncing chats, run `agent-sync doctor --fix-ignore-guards`.
 
 The default is private-by-default. Chat archives stay ignored unless you deliberately force-add them, for example with `git add -f .agents/chats`.
+
+## T3 Archive Pull
+
+`pull:t3` reads normalized JSON conversations from the configured central archive and `unknownProjectDir`. It does not reread provider sources. By default it is a dry run, so this is the safest starting point:
+
+```bash
+node dist/src/cli.js pull:t3 --dry-run
+```
+
+Use filters before exporting or importing:
+
+```bash
+node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
+```
+
+To hand the projection data to another tool without writing to T3, export NDJSON:
+
+```bash
+node dist/src/cli.js pull:t3 --export ./t3-import.ndjson
+```
+
+SQLite writes are opt-in and require an explicit `--database` path. Only use `--write` after reviewing a dry run or export, and prefer a copy of T3's database until you are comfortable with the result:
+
+```bash
+cp ~/.t3/userdata/state.sqlite /tmp/t3-agent-sync-test.sqlite
+node dist/src/cli.js pull:t3 --write --database /tmp/t3-agent-sync-test.sqlite --limit 5
+```
+
+Imported rows use deterministic `agent-sync:` IDs and metadata markers, so rerunning the command does not duplicate already-imported archive conversations.
 
 ## Public Repo Safety
 
