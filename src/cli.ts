@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { cancel, isCancel, multiselect } from "@clack/prompts";
+import { cancel, isCancel, multiselect, outro } from "@clack/prompts";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
@@ -239,8 +239,12 @@ async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOpti
       required: false,
     });
 
-    if (isCancel(selectedProjects) || selectedProjects.length === 0) {
-      cancel("No projects selected.");
+    if (isCancel(selectedProjects)) {
+      cancel("Selection cancelled; nothing imported.");
+      return [];
+    }
+    if (selectedProjects.length === 0) {
+      outro("No projects selected; nothing imported.");
       return [];
     }
 
@@ -265,8 +269,12 @@ async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOpti
     required: false,
   });
 
-  if (isCancel(selectedChats) || selectedChats.length === 0) {
-    cancel("No chats selected.");
+  if (isCancel(selectedChats)) {
+    cancel("Selection cancelled; nothing imported.");
+    return [];
+  }
+  if (selectedChats.length === 0) {
+    outro("No chats selected; nothing imported.");
     return [];
   }
 
