@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { access, readdir, stat } from "node:fs/promises";
 import { dirname, extname } from "node:path";
 import { expandHomePath } from "./path-utils.js";
+import { discoverProjects } from "./projects.js";
 import { enabledProviders } from "../providers/index.js";
 import type { SyncConfig, SyncDiagnostic } from "../types.js";
 
@@ -61,6 +62,7 @@ async function countJsonAndMarkdownFiles(root: string): Promise<number> {
 
 export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
   const diagnostics: SyncDiagnostic[] = [];
+  const projects = await discoverProjects(config.projectRoots);
 
   for (const projectRoot of config.projectRoots) {
     const expandedRoot = expandHomePath(projectRoot);
@@ -69,6 +71,11 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
       status === "ok" ? diagnosticForDirectory("project", expandedRoot) : warningForDirectory("project", expandedRoot, status)
     );
   }
+
+  diagnostics.push({
+    level: "info",
+    message: `Discovered projects: ${projects.length}${projects.length > 0 ? ` (${projects.map((project) => project.name).join(", ")})` : ""}`,
+  });
 
   for (const provider of enabledProviders(config)) {
     const paths = provider.watchPaths?.(config) ?? [];
@@ -86,6 +93,47 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
       const diagnostic =
         status === "ok" ? diagnosticForDirectory("provider", path) : warningForDirectory("provider", path, status);
       diagnostics.push({ ...diagnostic, provider: provider.id, sourcePath: path });
+    }
+
+    if (!config.providers[provider.id]?.paths?.length) {
+      diagnostics.push({
+        level: "info",
+        provider: provider.id,
+        message: "Provider discover/read skipped: no configured paths",
+      });
+      continue;
+    }
+
+    let refs;
+    try {
+      refs = await provider.discover(config);
+      diagnostics.push({
+        level: "info",
+        provider: provider.id,
+        message: `Provider records discovered: ${refs.length}`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      diagnostics.push({
+        level: "error",
+        provider: provider.id,
+        message: `Failed to discover provider records: ${message}`,
+      });
+      continue;
+    }
+
+    for (const ref of refs) {
+      try {
+        await provider.read(ref);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        diagnostics.push({
+          level: "error",
+          provider: provider.id,
+          sourcePath: ref.path,
+          message: `Failed to read conversation: ${message}`,
+        });
+      }
     }
   }
 

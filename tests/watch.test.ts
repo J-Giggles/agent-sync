@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDebouncedRunner, watcherOptions } from "../src/core/watch.js";
+import { createDebouncedRunner, providerIdsForChangedPath, runWatch, watcherOptions } from "../src/core/watch.js";
+import type { SyncConfig } from "../src/types.js";
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve: () => void = () => undefined;
@@ -65,5 +66,55 @@ describe("watcherOptions", () => {
       stabilityThreshold: 500,
       pollInterval: 100,
     });
+  });
+});
+
+describe("providerIdsForChangedPath", () => {
+  it("returns only providers whose watch path contains the changed file", () => {
+    const config: SyncConfig = {
+      projectRoots: [],
+      centralArchiveDir: "/archive",
+      unknownProjectDir: "/unknown",
+      projectArchiveDir: ".agents/chats",
+      providers: {
+        codex: { enabled: true, paths: ["/tmp/provider/codex"] },
+        cursor: { enabled: true, paths: ["/tmp/provider/cursor"] },
+      },
+    };
+
+    expect(providerIdsForChangedPath(config, "/tmp/provider/codex/session.jsonl")).toEqual(["codex"]);
+  });
+
+  it("does not match paths that only share a prefix", () => {
+    const config: SyncConfig = {
+      projectRoots: [],
+      centralArchiveDir: "/archive",
+      unknownProjectDir: "/unknown",
+      projectArchiveDir: ".agents/chats",
+      providers: {
+        codex: { enabled: true, paths: ["/tmp/provider/codex"] },
+      },
+    };
+
+    expect(providerIdsForChangedPath(config, "/tmp/provider/codex-backup/session.jsonl")).toEqual([]);
+  });
+});
+
+describe("runWatch", () => {
+  it("returns after logging when no provider watch paths are enabled", async () => {
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await expect(
+      runWatch({
+        projectRoots: [],
+        centralArchiveDir: "/archive",
+        unknownProjectDir: "/unknown",
+        projectArchiveDir: ".agents/chats",
+        providers: {},
+      })
+    ).resolves.toBeUndefined();
+
+    expect(log).toHaveBeenCalledWith("agent-sync watch: no enabled provider watch paths");
+    log.mockRestore();
   });
 });

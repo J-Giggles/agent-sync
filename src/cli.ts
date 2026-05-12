@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
+import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
+import { enabledProviders } from "./providers/index.js";
 import type { SyncConfig, SyncDiagnostic } from "./types.js";
 
 type SyncManifest = {
@@ -15,6 +17,13 @@ type SyncManifest = {
   written?: number;
   skipped?: number;
   diagnostics?: SyncDiagnostic[];
+  conversations?: Array<{
+    provider?: string;
+    sourcePath?: string;
+    projectName?: string;
+    updatedAt?: string;
+    outputs?: string[];
+  }>;
 };
 
 export type StatusResult = {
@@ -36,8 +45,24 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
   }
 }
 
+async function countJsonAndMarkdownFiles(root: string): Promise<number> {
+  try {
+    const entries = await readdir(root, { recursive: true, withFileTypes: true });
+    return entries.filter((entry) => {
+      if (!entry.isFile()) return false;
+      const extension = extname(entry.name).toLowerCase();
+      return extension === ".json" || extension === ".md";
+    }).length;
+  } catch {
+    return 0;
+  }
+}
+
 export async function readStatus(config: SyncConfig): Promise<StatusResult> {
   const manifestPath = join(expandHomePath(config.centralArchiveDir), ".agent-sync-manifest.json");
+  const enabledProviderIds = enabledProviders(config).map((provider) => provider.id);
+  const projects = await discoverProjects(config.projectRoots);
+  const unknownProjectCount = await countJsonAndMarkdownFiles(expandHomePath(config.unknownProjectDir));
 
   let manifest: SyncManifest;
   try {
@@ -64,14 +89,35 @@ export async function readStatus(config: SyncConfig): Promise<StatusResult> {
     };
   }
 
+  const latestConversations = (manifest.conversations ?? [])
+    .filter((conversation) => Array.isArray(conversation.outputs) && conversation.outputs.length > 0)
+    .sort((a, b) => Date.parse(b.updatedAt ?? "") - Date.parse(a.updatedAt ?? ""))
+    .slice(0, 5);
+  const latestLines =
+    latestConversations.length > 0
+      ? latestConversations.map((conversation) => {
+          const label = [
+            conversation.provider ?? "unknown-provider",
+            conversation.projectName ? `project ${conversation.projectName}` : "unknown project",
+            conversation.updatedAt ?? "unknown time",
+          ].join(" | ");
+          return `  - ${label}: ${conversation.outputs?.join(", ")}`;
+        })
+      : ["  none recorded"];
+
   return {
     level: "info",
     lines: [
       `manifest: ${manifestPath}`,
+      `enabled providers: ${enabledProviderIds.length > 0 ? enabledProviderIds.join(", ") : "none"}`,
+      `discovered projects: ${projects.length}${projects.length > 0 ? ` (${projects.map((project) => project.name).join(", ")})` : ""}`,
       `updated: ${manifest.updatedAt ?? "unknown"}`,
       `written: ${manifest.written ?? 0}`,
       `skipped: ${manifest.skipped ?? 0}`,
       `diagnostics: ${manifest.diagnostics?.length ?? 0}`,
+      "latest synced conversations:",
+      ...latestLines,
+      `unknown-project archive files: ${unknownProjectCount}`,
     ],
   };
 }

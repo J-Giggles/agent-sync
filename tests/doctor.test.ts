@@ -47,4 +47,45 @@ describe("runDoctor", () => {
       true
     );
   });
+
+  it("reports project discovery and provider read diagnostics without writing archives", async () => {
+    const root = join(tmpdir(), `agent-sync-doctor-${crypto.randomUUID()}`);
+    const projectsRoot = join(root, "projects");
+    const projectRoot = join(projectsRoot, "app");
+    const providerDir = join(root, "provider");
+    const archive = join(root, "archive");
+
+    await mkdir(projectRoot, { recursive: true });
+    await mkdir(providerDir, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(join(providerDir, "bad-session.jsonl"), "{not json}\n");
+
+    const diagnostics = await runDoctor({
+      projectRoots: [projectsRoot],
+      centralArchiveDir: archive,
+      unknownProjectDir: join(root, "unknown-project"),
+      projectArchiveDir: ".agents/chats",
+      providers: { codex: { enabled: true, paths: [providerDir] } },
+    });
+
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "info",
+          message: "Discovered projects: 1 (app)",
+        }),
+        expect.objectContaining({
+          level: "info",
+          provider: "codex",
+          message: "Provider records discovered: 1",
+        }),
+        expect.objectContaining({
+          level: "error",
+          provider: "codex",
+          sourcePath: join(providerDir, "bad-session.jsonl"),
+          message: expect.stringContaining("Failed to read conversation"),
+        }),
+      ])
+    );
+  });
 });

@@ -5,12 +5,25 @@ import { expandHomePath, isSafeRelativePath } from "./path-utils.js";
 import { discoverProjects, matchProject } from "./projects.js";
 import { renderJson, renderMarkdown } from "./render.js";
 import { enabledProviders } from "../providers/index.js";
-import type { NormalizedConversation, SyncConfig, SyncDiagnostic } from "../types.js";
+import type { NormalizedConversation, ProviderId, SyncConfig, SyncDiagnostic } from "../types.js";
+
+export type SyncedConversationOutput = {
+  provider: string;
+  sourcePath: string;
+  projectName?: string;
+  updatedAt?: string;
+  outputs: string[];
+};
 
 export type SyncResult = {
   written: number;
   skipped: number;
   diagnostics: SyncDiagnostic[];
+  conversations: SyncedConversationOutput[];
+};
+
+export type RunSyncOptions = {
+  providerIds?: ProviderId[];
 };
 
 type RenderedTarget = {
@@ -67,6 +80,7 @@ async function writeManifest(config: SyncConfig, result: SyncResult): Promise<vo
     written: result.written,
     skipped: result.skipped,
     diagnostics: result.diagnostics,
+    conversations: result.conversations,
   };
   let updatedAt = new Date().toISOString();
 
@@ -93,14 +107,16 @@ async function writeManifest(config: SyncConfig, result: SyncResult): Promise<vo
   );
 }
 
-export async function runSync(config: SyncConfig): Promise<SyncResult> {
+export async function runSync(config: SyncConfig, options: RunSyncOptions = {}): Promise<SyncResult> {
   const diagnostics: SyncDiagnostic[] = [];
+  const conversations: SyncedConversationOutput[] = [];
   let written = 0;
   let skipped = 0;
   if (!isSafeRelativePath(config.projectArchiveDir)) {
     return {
       written,
       skipped,
+      conversations,
       diagnostics: [
         {
           level: "error",
@@ -116,8 +132,11 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
     unknownProjectDir: expandHomePath(config.unknownProjectDir),
   };
   const projects = await discoverProjects(config.projectRoots);
+  const enabledProviderList = enabledProviders(archiveConfig).filter(
+    (provider) => !options.providerIds || options.providerIds.includes(provider.id)
+  );
 
-  for (const provider of enabledProviders(archiveConfig)) {
+  for (const provider of enabledProviderList) {
     let refs;
     try {
       refs = await provider.discover(archiveConfig);
@@ -171,6 +190,13 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
         const counts = await writeRenderedTargets(renderedTargets);
         written += counts.written;
         skipped += counts.skipped;
+        conversations.push({
+          provider: provider.id,
+          sourcePath: ref.path,
+          projectName: conversation.project?.name,
+          updatedAt: conversation.updatedAt ?? conversation.startedAt,
+          outputs: renderedTargets.map((target) => target.path),
+        });
       } catch (error) {
         diagnostics.push({
           level: "error",
@@ -182,7 +208,7 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
     }
   }
 
-  const result = { written, skipped, diagnostics };
+  const result = { written, skipped, diagnostics, conversations };
   await writeManifest(archiveConfig, result);
   return result;
 }

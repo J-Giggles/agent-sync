@@ -108,11 +108,27 @@ describe("runSync", () => {
       written: number;
       skipped: number;
       diagnostics: unknown[];
+      conversations: Array<{ provider: string; sourcePath: string; outputs: string[] }>;
     };
     expect(manifest.schemaVersion).toBe(1);
     expect(manifest.written).toBe(0);
     expect(manifest.skipped).toBe(6);
     expect(manifest.diagnostics).toEqual([]);
+    expect(manifest.conversations).toEqual([
+      expect.objectContaining({
+        provider: "codex",
+        sourcePath: join(providerDir, "matched-session.jsonl"),
+        outputs: expect.arrayContaining([
+          expect.stringContaining(join(archive, "app")),
+          expect.stringContaining(join(projectRoot, ".agents", "chats")),
+        ]),
+      }),
+      expect.objectContaining({
+        provider: "codex",
+        sourcePath: join(providerDir, "unknown-session.jsonl"),
+        outputs: expect.arrayContaining([expect.stringContaining(unknown)]),
+      }),
+    ]);
   });
 
   it("reports malformed provider files and continues syncing valid conversations", async () => {
