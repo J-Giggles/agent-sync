@@ -281,6 +281,47 @@ describe("runPullT3", () => {
     expect(JSON.parse(messageRows[0].attachments_json).agentSyncImport.sourceArchivePath).toContain("archive");
   });
 
+  it("attaches imported threads to an existing T3 project when the archive project matches", async () => {
+    const root = await makeTempRoot("agent-sync-t3-existing-project");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    await createFixtureDatabase(databasePath);
+    await execFileAsync("sqlite3", [
+      databasePath,
+      `
+      insert into projection_projects values (
+        'existing-agent-sync-project',
+        'agent-sync',
+        '/work/agent-sync',
+        '{}',
+        '2026-05-12T09:00:00.000Z',
+        '2026-05-12T09:00:00.000Z',
+        null,
+        '{}'
+      );
+      `,
+    ]);
+
+    const result = await runPullT3(config, {
+      databasePath,
+      dryRun: false,
+      project: "agent-sync",
+      provider: "codex",
+    });
+    const threadRows = await sqliteRows<{ project_id: string }>(
+      databasePath,
+      "select project_id from projection_threads where thread_id like 'agent-sync:%'"
+    );
+    const importedProjectRows = await sqliteRows<{ count: number }>(
+      databasePath,
+      "select count(*) as count from projection_projects where project_id like 'agent-sync:project:%'"
+    );
+
+    expect(result.imported).toBe(1);
+    expect(threadRows).toEqual([{ project_id: "existing-agent-sync-project" }]);
+    expect(importedProjectRows[0].count).toBe(0);
+  });
+
   it("imports large conversations without exceeding command argument limits", async () => {
     const root = await makeTempRoot("agent-sync-t3-large-import");
     const config = await fixtureConfig(root);

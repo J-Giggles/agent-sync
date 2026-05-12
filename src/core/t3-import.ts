@@ -84,6 +84,12 @@ type T3ProjectRow = {
   default_model_selection_json: string;
 };
 
+type ExistingT3ProjectRow = {
+  project_id: string;
+  title: string;
+  workspace_root: string;
+};
+
 type T3ThreadRow = {
   thread_id: string;
   project_id: string;
@@ -201,6 +207,43 @@ function normalizedTimestamp(value: string | undefined, fallback: string): strin
 
 function messageTimestamp(message: NormalizedMessage, conversation: NormalizedConversation): string {
   return normalizedTimestamp(message.createdAt, normalizedTimestamp(conversation.startedAt, new Date(0).toISOString()));
+}
+
+function archiveWorkspaceRoot(config: SyncConfig, archived: ArchivedConversation): string {
+  return (
+    archived.conversation.project?.root ??
+    stringValue(archived.conversation.metadata.cwd) ??
+    stringValue(archived.conversation.metadata.workspace) ??
+    expandHomePath(config.centralArchiveDir)
+  );
+}
+
+function projectMatchKey(title: string, workspaceRoot: string): string {
+  return `${title}\0${workspaceRoot}`;
+}
+
+async function existingProjects(databasePath: string): Promise<ExistingT3ProjectRow[]> {
+  const { stdout } = await execFileAsync(
+    "sqlite3",
+    [
+      "-readonly",
+      "-json",
+      databasePath,
+      "select project_id, title, workspace_root from projection_projects where deleted_at is null",
+    ],
+    { maxBuffer: 128 * 1024 * 1024 }
+  );
+  return stdout.trim() ? (JSON.parse(stdout) as ExistingT3ProjectRow[]) : [];
+}
+
+function existingProjectIdFor(archived: ArchivedConversation, existing: ExistingT3ProjectRow[], workspaceRoot: string): string | undefined {
+  const exact = existing.find(
+    (project) => projectMatchKey(project.title, project.workspace_root) === projectMatchKey(archived.projectName, workspaceRoot)
+  );
+  if (exact) return exact.project_id;
+
+  const sameName = existing.filter((project) => project.title === archived.projectName);
+  return sameName.length === 1 ? sameName[0].project_id : undefined;
 }
 
 async function findJsonFiles(root: string): Promise<string[]> {
@@ -409,14 +452,15 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
   const createdAt = normalizedTimestamp(conversation.startedAt, new Date(0).toISOString());
   const updatedAt = normalizedTimestamp(conversation.updatedAt, createdAt);
   const threadId = `agent-sync:${stableHash(`${conversation.provider}:${conversation.providerConversationId}`)}`;
-  const projectId = `agent-sync:project:${stableHash(expandHomePath(config.centralArchiveDir))}`;
+  const workspaceRoot = archiveWorkspaceRoot(config, archived);
+  const projectId = `agent-sync:project:${stableHash(`${archived.projectName}:${workspaceRoot}`)}`;
 
   return {
     type: "agent-sync.t3-import.v1",
     project: {
       project_id: projectId,
-      title: "agent-sync archive",
-      workspace_root: expandHomePath(config.centralArchiveDir),
+      title: archived.projectName,
+      workspace_root: workspaceRoot,
       scripts_json: "{}",
       created_at: createdAt,
       updated_at: updatedAt,
@@ -474,6 +518,20 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
       updated_at: updatedAt,
       runtime_mode: "full-access",
       provider_instance_id: "agent-sync",
+    },
+  };
+}
+
+function applyExistingProject(record: T3ImportRecord, projectId: string): T3ImportRecord {
+  return {
+    ...record,
+    project: {
+      ...record.project,
+      project_id: projectId,
+    },
+    thread: {
+      ...record.thread,
+      project_id: projectId,
     },
   };
 }
@@ -603,8 +661,13 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
   const filtered = filterArchived(await readArchivedConversations(config), options);
   const deduped = deduplicateArchived(filtered.conversations);
   const archived = deduped.conversations;
-  const records = archived.map((item) => buildImportRecord(config, item));
   const databasePath = expandHomePath(options.databasePath ?? defaultT3DatabasePath);
+  const existingProjectRows = dryRun ? [] : await existingProjects(databasePath);
+  const records = archived.map((item) => {
+    const record = buildImportRecord(config, item);
+    const projectId = existingProjectIdFor(item, existingProjectRows, record.project.workspace_root);
+    return projectId ? applyExistingProject(record, projectId) : record;
+  });
   const existing = dryRun || records.length === 0 ? new Set<string>() : await existingThreadIds(databasePath, records.map((record) => record.thread.thread_id));
   const exported = options.exportPath ? await exportRecords(options.exportPath, records) : 0;
   const imported = dryRun ? 0 : await importRecords(databasePath, records, existing);
