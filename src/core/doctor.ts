@@ -1,11 +1,15 @@
 import { constants } from "node:fs";
 import { access, readdir, stat } from "node:fs/promises";
 import { dirname, extname } from "node:path";
-import { inspectProjectArchiveIgnore } from "./gitignore-guard.js";
+import { ensureProjectArchiveIgnored, inspectProjectArchiveIgnore } from "./gitignore-guard.js";
 import { expandHomePath } from "./path-utils.js";
 import { discoverProjects } from "./projects.js";
 import { enabledProviders } from "../providers/index.js";
 import type { SyncConfig, SyncDiagnostic } from "../types.js";
+
+export type DoctorOptions = {
+  fixIgnoreGuards?: boolean;
+};
 
 async function inspectDirectory(path: string): Promise<"ok" | "missing" | "not-directory" | "inaccessible"> {
   let stats;
@@ -61,7 +65,7 @@ async function countJsonAndMarkdownFiles(root: string): Promise<number> {
   }).length;
 }
 
-export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
+export async function runDoctor(config: SyncConfig, options: DoctorOptions = {}): Promise<SyncDiagnostic[]> {
   const diagnostics: SyncDiagnostic[] = [];
   const projects = await discoverProjects(config.projectRoots);
 
@@ -81,11 +85,29 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
   for (const project of projects) {
     const status = await inspectProjectArchiveIgnore(project.root, config.projectArchiveDir);
     if (!status.ignored) {
-      diagnostics.push({
-        level: "warn",
-        sourcePath: status.archivePath,
-        message: `Project archive is not ignored: ${status.archivePath}`,
-      });
+      if (options.fixIgnoreGuards) {
+        try {
+          await ensureProjectArchiveIgnored(project.root, config.projectArchiveDir);
+          diagnostics.push({
+            level: "info",
+            sourcePath: status.archivePath,
+            message: `Created project archive ignore guard: ${status.archivePath}`,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          diagnostics.push({
+            level: "error",
+            sourcePath: status.archivePath,
+            message: `Failed to create project archive ignore guard: ${message}`,
+          });
+        }
+      } else {
+        diagnostics.push({
+          level: "warn",
+          sourcePath: status.archivePath,
+          message: `Project archive is not ignored: ${status.archivePath}`,
+        });
+      }
     }
   }
 
@@ -105,6 +127,15 @@ export async function runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]> {
       const diagnostic =
         status === "ok" ? diagnosticForDirectory("provider", path) : warningForDirectory("provider", path, status);
       diagnostics.push({ ...diagnostic, provider: provider.id, sourcePath: path });
+    }
+
+    if (options.fixIgnoreGuards) {
+      diagnostics.push({
+        level: "info",
+        provider: provider.id,
+        message: "Provider discover/read skipped: fixing ignore guards",
+      });
+      continue;
     }
 
     if (!config.providers[provider.id]?.paths?.length) {

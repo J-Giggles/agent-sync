@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -166,6 +166,88 @@ describe("runDoctor", () => {
           level: "warn",
           message: expect.stringContaining("Project archive is not ignored"),
           sourcePath: join(projectRoot, ".agents", "chats"),
+        }),
+      ])
+    );
+  });
+
+  it("can create missing project archive ignore guards without syncing chats", async () => {
+    const root = join(tmpdir(), `agent-sync-doctor-${crypto.randomUUID()}`);
+    const projectsRoot = join(root, "projects");
+    const projectRoot = join(projectsRoot, "app");
+
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+
+    const diagnostics = await runDoctor(
+      {
+        projectRoots: [projectsRoot],
+        centralArchiveDir: join(root, "archive"),
+        unknownProjectDir: join(root, "unknown-project"),
+        projectArchiveDir: ".agents/chats",
+        providers: {},
+      },
+      { fixIgnoreGuards: true }
+    );
+
+    expect(await readFile(join(projectRoot, ".agents", ".gitignore"), "utf8")).toBe("chats/\n");
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "info",
+          message: expect.stringContaining("Created project archive ignore guard"),
+          sourcePath: join(projectRoot, ".agents", "chats"),
+        }),
+      ])
+    );
+    expect(diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          message: expect.stringContaining("Project archive is not ignored"),
+        }),
+      ])
+    );
+  });
+
+  it("does not read provider records while creating ignore guards", async () => {
+    const root = join(tmpdir(), `agent-sync-doctor-${crypto.randomUUID()}`);
+    const projectsRoot = join(root, "projects");
+    const projectRoot = join(projectsRoot, "app");
+    const providerDir = join(root, "provider");
+
+    await mkdir(projectRoot, { recursive: true });
+    await mkdir(providerDir, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(join(providerDir, "bad-session.jsonl"), "{not json}\n");
+
+    const diagnostics = await runDoctor(
+      {
+        projectRoots: [projectsRoot],
+        centralArchiveDir: join(root, "archive"),
+        unknownProjectDir: join(root, "unknown-project"),
+        projectArchiveDir: ".agents/chats",
+        providers: { codex: { enabled: true, paths: [providerDir] } },
+      },
+      { fixIgnoreGuards: true }
+    );
+
+    expect(await readFile(join(projectRoot, ".agents", ".gitignore"), "utf8")).toBe("chats/\n");
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "info",
+          provider: "codex",
+          message: "Provider discover/read skipped: fixing ignore guards",
+        }),
+      ])
+    );
+    expect(diagnostics).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          provider: "codex",
+          message: expect.stringContaining("Failed to read conversation"),
         }),
       ])
     );

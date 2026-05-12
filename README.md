@@ -67,6 +67,9 @@ Provider `paths` are optional. When configured, they limit discovery and diagnos
 # Check project roots, provider paths, archive directories, and ignore guards.
 node dist/src/cli.js doctor
 
+# Create missing `.agents/.gitignore` guards without syncing chats.
+node dist/src/cli.js doctor --fix-ignore-guards
+
 # Show the latest sync manifest summary.
 node dist/src/cli.js status
 
@@ -112,6 +115,8 @@ archive/.agent-sync-manifest.json
 ## Project-Local Ignore Guard
 
 Before writing matched conversations into a project archive, `agent-sync` ensures the project-local archive path is ignored by Git. For the default `.agents/chats` path, it uses the less invasive guard `<project>/.agents/.gitignore` with `chats/`; it does not edit the project's root `.gitignore`. If the project archive path is unsafe or the guard cannot be written, the project-local write is skipped and reported as a diagnostic.
+
+To pre-create those guards without scanning or syncing chats, run `agent-sync doctor --fix-ignore-guards`.
 
 The default is private-by-default. Chat archives stay ignored unless you deliberately force-add them, for example with `git add -f .agents/chats`.
 

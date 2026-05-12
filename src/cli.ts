@@ -200,13 +200,17 @@ program.command("status").description("Show sync status").action(async () => {
   await printStatus(config);
 });
 
-program.command("doctor").description("Check provider and archive configuration").action(async () => {
-  const config = await loadConfig();
-  const diagnostics = await runDoctor(config);
-  for (const diagnostic of diagnostics) {
-    printDiagnostic(diagnostic);
-  }
-});
+program
+  .command("doctor")
+  .description("Check provider and archive configuration")
+  .option("--fix-ignore-guards", "Create missing project-local archive ignore guards without syncing chats")
+  .action(async (options: { fixIgnoreGuards?: boolean }) => {
+    const config = await loadConfig();
+    const diagnostics = await runDoctor(config, { fixIgnoreGuards: options.fixIgnoreGuards });
+    for (const diagnostic of diagnostics) {
+      printDiagnostic(diagnostic);
+    }
+  });
 
 if (isDirectCliExecution(process.argv[1], import.meta.url)) {
   await program.parseAsync();
