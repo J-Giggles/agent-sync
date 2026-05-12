@@ -1,9 +1,11 @@
 import { lstat, readFile, stat } from "node:fs/promises";
-import { homedir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { basename, extname } from "node:path";
 import fg from "fast-glob";
 import { createStableId } from "../core/fingerprints.js";
+import { expandHomePath, expandHomePaths } from "../core/path-utils.js";
 import type { MessageRole, NormalizedConversation, NormalizedMessage, ProviderId, RawConversationRef, SyncConfig } from "../types.js";
+
+export { expandHomePath, expandHomePaths };
 
 type JsonObject = Record<string, unknown>;
 
@@ -91,16 +93,6 @@ async function lstatIfAccessible(path: string) {
   } catch {
     return undefined;
   }
-}
-
-export function expandHomePath(path: string): string {
-  if (path === "~") return homedir();
-  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
-  return path;
-}
-
-export function expandHomePaths(paths: string[]): string[] {
-  return paths.map((path) => expandHomePath(path));
 }
 
 export async function discoverJsonRefs(

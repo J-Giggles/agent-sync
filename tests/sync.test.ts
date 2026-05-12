@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -71,6 +71,9 @@ describe("runSync", () => {
 
     const first = await runSync(config);
     const second = await runSync(config);
+    const manifestAfterSecond = await readFile(join(archive, ".agent-sync-manifest.json"), "utf8");
+    const third = await runSync(config);
+    const manifestAfterThird = await readFile(join(archive, ".agent-sync-manifest.json"), "utf8");
 
     expect(first.diagnostics).toEqual([]);
     expect(first.written).toBe(6);
@@ -78,6 +81,10 @@ describe("runSync", () => {
     expect(second.written).toBe(0);
     expect(second.skipped).toBe(6);
     expect(second.diagnostics).toEqual([]);
+    expect(third.written).toBe(0);
+    expect(third.skipped).toBe(6);
+    expect(third.diagnostics).toEqual([]);
+    expect(manifestAfterThird).toBe(manifestAfterSecond);
 
     const centralMatched = archiveFiles(await listFiles(join(archive, "app")));
     const projectLocal = archiveFiles(await listFiles(join(projectRoot, ".agents", "chats")));
@@ -151,5 +158,113 @@ describe("runSync", () => {
     ]);
     expect(archiveFiles(await listFiles(join(archive, "app")))).toHaveLength(2);
     expect(archiveFiles(await listFiles(join(projectRoot, ".agents", "chats")))).toHaveLength(2);
+  });
+
+  it("expands home-relative archive roots before writing", async () => {
+    const originalHome = process.env.HOME;
+    const root = await makeTempRoot("agent-sync-home-expansion");
+    const fakeHome = join(root, "fake-home");
+    const cwd = join(root, "cwd");
+    const projectsRoot = join(root, "projects");
+    const providerDir = join(root, "provider");
+    const projectRoot = join(projectsRoot, "app");
+
+    await mkdir(fakeHome, { recursive: true });
+    await mkdir(cwd, { recursive: true });
+    await mkdir(providerDir, { recursive: true });
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(
+      join(providerDir, "matched-session.jsonl"),
+      `${JSON.stringify({
+        id: "m1",
+        role: "user",
+        content: "home expansion",
+        timestamp: "2026-05-12T10:00:00.000Z",
+        cwd: projectRoot,
+      })}\n`
+    );
+    await writeFile(
+      join(providerDir, "unknown-session.jsonl"),
+      `${JSON.stringify({
+        id: "u1",
+        role: "user",
+        content: "home expansion unknown",
+        timestamp: "2026-05-12T11:00:00.000Z",
+        cwd: "/elsewhere",
+      })}\n`
+    );
+
+    process.env.HOME = fakeHome;
+    const originalCwd = process.cwd();
+    process.chdir(cwd);
+
+    try {
+      const result = await runSync({
+        projectRoots: [projectsRoot],
+        centralArchiveDir: "~/archive",
+        unknownProjectDir: "~/unknown",
+        projectArchiveDir: ".agents/chats",
+        providers: { codex: { enabled: true, paths: [providerDir] } },
+      });
+
+      expect(result.diagnostics).toEqual([]);
+      expect(archiveFiles(await listFiles(join(fakeHome, "archive", "app")))).toHaveLength(2);
+      expect(archiveFiles(await listFiles(join(fakeHome, "unknown")))).toHaveLength(2);
+      expect(await listFiles(join(cwd, "~"))).toEqual([]);
+    } finally {
+      process.chdir(originalCwd);
+      if (originalHome === undefined) delete process.env.HOME;
+      else process.env.HOME = originalHome;
+    }
+  });
+
+  it.each([
+    { name: "../../leak", pathFor: () => "../../leak" },
+    { name: "absolute path", pathFor: (root: string) => join(root, "absolute-leak") },
+  ])("rejects unsafe projectArchiveDir $name without writing project-local output", async ({ pathFor }) => {
+    const root = await makeTempRoot("agent-sync-unsafe-project-archive");
+    const projectsRoot = join(root, "projects");
+    const providerDir = join(root, "provider");
+    const projectRoot = join(projectsRoot, "app");
+    const archive = join(root, "archive");
+    const unknown = join(root, "unknown-project");
+    const projectArchiveDir = pathFor(root);
+    const leakRoot = projectArchiveDir.startsWith("/") ? projectArchiveDir : join(projectRoot, projectArchiveDir);
+
+    await mkdir(providerDir, { recursive: true });
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(
+      join(providerDir, "matched-session.jsonl"),
+      `${JSON.stringify({
+        id: "m1",
+        role: "user",
+        content: "should not leak",
+        timestamp: "2026-05-12T10:00:00.000Z",
+        cwd: projectRoot,
+      })}\n`
+    );
+
+    const result = await runSync({
+      projectRoots: [projectsRoot],
+      centralArchiveDir: archive,
+      unknownProjectDir: unknown,
+      projectArchiveDir,
+      providers: { codex: { enabled: true, paths: [providerDir] } },
+    });
+
+    expect(result.written).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        level: "error",
+        message: expect.stringContaining("Unsafe projectArchiveDir"),
+      }),
+    ]);
+    expect(archiveFiles(await listFiles(join(projectRoot, ".agents", "chats")))).toHaveLength(0);
+    await expect(stat(leakRoot)).rejects.toThrow();
+    expect(await listFiles(archive)).toEqual([]);
+    expect(await listFiles(unknown)).toEqual([]);
   });
 });

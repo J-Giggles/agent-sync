@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { archiveTargets } from "./archive-paths.js";
+import { expandHomePath, isSafeRelativePath } from "./path-utils.js";
 import { discoverProjects, matchProject } from "./projects.js";
 import { renderJson, renderMarkdown } from "./render.js";
 import { enabledProviders } from "../providers/index.js";
@@ -61,16 +62,30 @@ async function writeRenderedTargets(targets: RenderedTarget[]): Promise<Pick<Syn
 
 async function writeManifest(config: SyncConfig, result: SyncResult): Promise<void> {
   const manifestPath = `${config.centralArchiveDir}/.agent-sync-manifest.json`;
-  await mkdir(dirname(manifestPath), { recursive: true });
-  await writeFile(
+  const summary = {
+    schemaVersion: 1,
+    written: result.written,
+    skipped: result.skipped,
+    diagnostics: result.diagnostics,
+  };
+  let updatedAt = new Date().toISOString();
+
+  try {
+    const existing = JSON.parse(await readFile(manifestPath, "utf8")) as { updatedAt?: unknown };
+    const { updatedAt: existingUpdatedAt, ...existingSummary } = existing;
+    if (JSON.stringify(existingSummary) === JSON.stringify(summary) && typeof existingUpdatedAt === "string") {
+      updatedAt = existingUpdatedAt;
+    }
+  } catch {
+    // Missing or malformed manifests are replaced below.
+  }
+
+  await writeIfChanged(
     manifestPath,
     `${JSON.stringify(
       {
-        schemaVersion: 1,
-        updatedAt: new Date().toISOString(),
-        written: result.written,
-        skipped: result.skipped,
-        diagnostics: result.diagnostics,
+        ...summary,
+        updatedAt,
       },
       null,
       2
@@ -82,12 +97,30 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
   const diagnostics: SyncDiagnostic[] = [];
   let written = 0;
   let skipped = 0;
+  if (!isSafeRelativePath(config.projectArchiveDir)) {
+    return {
+      written,
+      skipped,
+      diagnostics: [
+        {
+          level: "error",
+          message: `Unsafe projectArchiveDir: ${config.projectArchiveDir}`,
+        },
+      ],
+    };
+  }
+
+  const archiveConfig: SyncConfig = {
+    ...config,
+    centralArchiveDir: expandHomePath(config.centralArchiveDir),
+    unknownProjectDir: expandHomePath(config.unknownProjectDir),
+  };
   const projects = await discoverProjects(config.projectRoots);
 
-  for (const provider of enabledProviders(config)) {
+  for (const provider of enabledProviders(archiveConfig)) {
     let refs;
     try {
-      refs = await provider.discover(config);
+      refs = await provider.discover(archiveConfig);
     } catch (error) {
       diagnostics.push({
         level: "error",
@@ -120,7 +153,7 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
 
       let renderedTargets: RenderedTarget[];
       try {
-        renderedTargets = archiveTargets(config, conversation).flatMap((target) => [
+        renderedTargets = archiveTargets(archiveConfig, conversation).flatMap((target) => [
           { path: target.jsonPath, content: renderJson(conversation) },
           { path: target.markdownPath, content: renderMarkdown(conversation) },
         ]);
@@ -150,6 +183,6 @@ export async function runSync(config: SyncConfig): Promise<SyncResult> {
   }
 
   const result = { written, skipped, diagnostics };
-  await writeManifest(config, result);
+  await writeManifest(archiveConfig, result);
   return result;
 }
