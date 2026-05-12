@@ -1,0 +1,12 @@
+{
+  "projectRoots": ["~/code"],
+  "centralArchiveDir": "~/code/agent-sync/archive",
+  "unknownProjectDir": "~/code/agent-sync/unknown-project",
+  "projectArchiveDir": ".agents/chats",
+  "providers": {
+    "cursor": { "enabled": true },
+    "codex": { "enabled": true },
+    "claude-code": { "enabled": true },
+    "t3code": { "enabled": true }
+  }
+}

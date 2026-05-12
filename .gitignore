@@ -1,0 +1,29 @@
+# Dependencies and build output
+node_modules/
+dist/
+coverage/
+
+# Local environment and editor files
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Generated chat archives. These can contain private conversation history.
+archive/
+unknown-project/
+errors/
+**/.agents/chats/
+
+# Sync manifests and local runtime state
+.agent-sync-manifest.json
+**/.agent-sync-manifest.json
+.agent-sync/
+
+# Provider-local data must never be vendored into this repo.
+.codex/
+.claude/
+.cursor/
+.config/
+provider-data/
+fixtures/private/
