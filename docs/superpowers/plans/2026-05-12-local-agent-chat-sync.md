@@ -1295,7 +1295,7 @@ git commit -m "feat: sync normalized conversations"
 - Test: `tests/doctor.test.ts`
 - Modify: `src/cli.ts`
 
-- [ ] **Step 1: Write failing watch tests**
+- [x] **Step 1: Write failing watch tests**
 
 Create `tests/watch.test.ts`:
 
@@ -1320,7 +1320,7 @@ describe("createDebouncedRunner", () => {
 });
 ```
 
-- [ ] **Step 2: Write failing doctor tests**
+- [x] **Step 2: Write failing doctor tests**
 
 Create `tests/doctor.test.ts`:
 
@@ -1353,7 +1353,7 @@ describe("runDoctor", () => {
 });
 ```
 
-- [ ] **Step 3: Run tests to verify they fail**
+- [x] **Step 3: Run tests to verify they fail**
 
 Run:
 
@@ -1363,15 +1363,15 @@ npm test -- tests/watch.test.ts tests/doctor.test.ts
 
 Expected: FAIL because watch and doctor modules do not exist.
 
-- [ ] **Step 4: Implement watch**
+- [x] **Step 4: Implement watch**
 
 Create `src/core/watch.ts` with `runWatch(config: SyncConfig): Promise<void>`. Use `chokidar` to watch enabled provider paths. Debounce changes for 500 ms and call `runSync(config)`. Reuse provider `watchPaths(config)` when present.
 
-- [ ] **Step 5: Implement doctor**
+- [x] **Step 5: Implement doctor**
 
 Create `src/core/doctor.ts` with `runDoctor(config: SyncConfig): Promise<SyncDiagnostic[]>`. Check project root existence, provider configured paths/default paths, central archive parent existence, and unknown-project count when the directory exists.
 
-- [ ] **Step 6: Wire CLI commands**
+- [x] **Step 6: Wire CLI commands**
 
 Modify `src/cli.ts`:
 
@@ -1379,7 +1379,7 @@ Modify `src/cli.ts`:
 - `status` reads `.agent-sync-manifest.json` when present and prints latest aggregate counts
 - `doctor` calls `runDoctor(config)` and prints diagnostics
 
-- [ ] **Step 7: Verify tests pass**
+- [x] **Step 7: Verify tests pass**
 
 Run:
 
@@ -1390,7 +1390,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
