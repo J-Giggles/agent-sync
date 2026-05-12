@@ -460,6 +460,18 @@ describe("provider adapters", () => {
         created_at text not null,
         updated_at text not null
       );
+      create table projection_thread_sessions (
+        thread_id text primary key,
+        status text not null,
+        provider_name text,
+        provider_session_id text,
+        provider_thread_id text,
+        active_turn_id text,
+        last_error text,
+        updated_at text not null,
+        runtime_mode text not null default 'full-access',
+        provider_instance_id text
+      );
       insert into projection_projects values (
         'project-1',
         'Project',
@@ -500,6 +512,18 @@ describe("provider adapters", () => {
         '2026-05-12T10:02:00.000Z',
         '2026-05-12T10:02:00.000Z'
       );
+      insert into projection_thread_sessions values (
+        'thread-1',
+        'idle',
+        'claudeAgent',
+        null,
+        null,
+        null,
+        null,
+        '2026-05-12T10:03:00.000Z',
+        'full-access',
+        'claudeAgent'
+      );
       `,
     ]);
     const config = configWithProviderPath("t3code", path);
@@ -523,5 +547,7 @@ describe("provider adapters", () => {
     expect(conversation.messages.map((message) => message.text)).toEqual(["t3 sqlite hello", "t3 sqlite response"]);
     expect(conversation.metadata.cwd).toBe("/work/app");
     expect(conversation.metadata.branch).toBe("staging");
+    expect(conversation.metadata.t3ProviderName).toBe("claudeAgent");
+    expect(conversation.metadata.t3ProviderInstanceId).toBe("claudeAgent");
   });
 });

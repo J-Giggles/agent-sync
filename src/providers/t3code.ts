@@ -35,6 +35,8 @@ type T3MessageRow = {
   worktree_path?: string | null;
   workspace_root?: string | null;
   project_title?: string | null;
+  provider_name?: string | null;
+  provider_instance_id?: string | null;
   message_id: string;
   turn_id?: string | null;
   role: string;
@@ -153,6 +155,8 @@ async function readSqliteConversation(ref: RawConversationRef): Promise<Normaliz
         t.worktree_path,
         p.workspace_root,
         p.title as project_title,
+        s.provider_name,
+        s.provider_instance_id,
         m.message_id,
         m.turn_id,
         m.role,
@@ -161,6 +165,7 @@ async function readSqliteConversation(ref: RawConversationRef): Promise<Normaliz
         m.updated_at as message_updated_at
       from projection_threads t
       left join projection_projects p on p.project_id = t.project_id
+      left join projection_thread_sessions s on s.thread_id = t.thread_id
       join projection_thread_messages m on m.thread_id = t.thread_id
       where t.thread_id = ${shellSqlString(ref.idHint)}
         and t.deleted_at is null
@@ -190,6 +195,8 @@ async function readSqliteConversation(ref: RawConversationRef): Promise<Normaliz
   if (first.workspace_root) metadata.workspace = first.workspace_root;
   if (first.branch) metadata.branch = first.branch;
   if (first.project_title) metadata.projectTitle = first.project_title;
+  if (first.provider_name) metadata.t3ProviderName = first.provider_name;
+  if (first.provider_instance_id) metadata.t3ProviderInstanceId = first.provider_instance_id;
 
   return {
     schemaVersion: 1,

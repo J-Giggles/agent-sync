@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { formatPullT3Result, parsePullT3Selection, runPullT3 } from "../src/core/t3-import.js";
+import { formatPullT3Result, parsePullT3Selection, runPullT3, summarizePullT3Projects } from "../src/core/t3-import.js";
 import type { SyncConfig } from "../src/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -281,13 +281,68 @@ describe("runPullT3", () => {
             kind: "subagent",
             parentConversationId: "parent-1",
             agentRole: "worker",
+            t3ProviderName: "claudeAgent",
           },
         ],
       },
       { verbose: true }
     );
 
-    expect(lines).toContain("- would import: [subagent:worker] [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1, parent parent-1)");
+    expect(lines).toContain(
+      "- would import: [subagent:worker] [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1, parent parent-1, t3 provider claudeAgent)"
+    );
+  });
+
+  it("summarizes hidden subagents per project for the interactive selector", () => {
+    const visible = [
+      {
+        provider: "codex",
+        project: "agent-sync",
+        providerConversationId: "codex-original-1",
+        sourceArchivePath: "/archive/agent-sync/codex.json",
+        threadId: "agent-sync:codex",
+        title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        messageCount: 2,
+        alreadyImported: false,
+        kind: "top-level" as const,
+      },
+    ];
+    const summaries = summarizePullT3Projects(visible, [
+      ...visible,
+      {
+        provider: "codex",
+        project: "agent-sync",
+        providerConversationId: "codex-subagent-1",
+        sourceArchivePath: "/archive/agent-sync/codex-subagent.json",
+        threadId: "agent-sync:codex-subagent",
+        title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        messageCount: 2,
+        alreadyImported: false,
+        kind: "subagent" as const,
+        parentConversationId: "codex-original-1",
+      },
+      {
+        provider: "codex",
+        project: "agent-sync",
+        providerConversationId: "codex-subagent-2",
+        sourceArchivePath: "/archive/agent-sync/codex-subagent-2.json",
+        threadId: "agent-sync:codex-subagent-2",
+        title: "[agent-sync] codex / agent-sync / 2026-05-12",
+        messageCount: 3,
+        alreadyImported: false,
+        kind: "subagent" as const,
+        parentConversationId: "codex-original-1",
+      },
+    ]);
+
+    expect(summaries).toEqual([
+      {
+        project: "agent-sync",
+        conversations: 1,
+        messages: 2,
+        subagents: 2,
+      },
+    ]);
   });
 
   it("parses interactive number and range selections", () => {

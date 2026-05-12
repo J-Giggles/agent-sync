@@ -36,6 +36,8 @@ export type PullT3Item = {
   parentConversationId?: string;
   agentRole?: string;
   agentNickname?: string;
+  t3ProviderName?: string;
+  t3ProviderInstanceId?: string;
 };
 
 export type PullT3Result = {
@@ -47,6 +49,13 @@ export type PullT3Result = {
   skipped: number;
   exported: number;
   items: PullT3Item[];
+};
+
+export type PullT3ProjectSummary = {
+  project: string;
+  conversations: number;
+  messages: number;
+  subagents: number;
 };
 
 export type FormatPullT3Options = {
@@ -339,6 +348,8 @@ function metadataFor(archived: ArchivedConversation) {
     parentConversationId: archived.parentConversationId,
     agentRole: archived.agentRole,
     agentNickname: archived.agentNickname,
+    t3ProviderName: stringValue(archived.conversation.metadata.t3ProviderName),
+    t3ProviderInstanceId: stringValue(archived.conversation.metadata.t3ProviderInstanceId),
   };
 }
 
@@ -549,6 +560,8 @@ export async function runPullT3(config: SyncConfig, options: PullT3Options = {})
       parentConversationId: archived[index].parentConversationId,
       agentRole: archived[index].agentRole,
       agentNickname: archived[index].agentNickname,
+      t3ProviderName: stringValue(archived[index].conversation.metadata.t3ProviderName),
+      t3ProviderInstanceId: stringValue(archived[index].conversation.metadata.t3ProviderInstanceId),
     })),
   };
 }
@@ -594,8 +607,11 @@ export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Op
     for (const item of result.items) {
       const status = item.alreadyImported ? "already imported" : result.dryRun ? "would import" : "imported";
       const kind = item.kind === "subagent" ? `[subagent:${item.agentRole ?? "unknown"}] ` : "";
+      const t3Provider = item.t3ProviderName ? `, t3 provider ${item.t3ProviderName}` : "";
       const parent = item.parentConversationId ? `, parent ${item.parentConversationId}` : "";
-      lines.push(`- ${status}: ${kind}${item.title} (${item.messageCount} messages, source ${item.providerConversationId}${parent})`);
+      lines.push(
+        `- ${status}: ${kind}${item.title} (${item.messageCount} messages, source ${item.providerConversationId}${parent}${t3Provider})`
+      );
     }
   } else {
     lines.push("Use --verbose to list every planned conversation.");
@@ -608,6 +624,36 @@ function assertSelectionInRange(value: number, max: number): void {
   if (!Number.isInteger(value) || value < 1 || value > max) {
     throw new Error(`Selection ${value} is outside the valid range 1-${max}.`);
   }
+}
+
+export function summarizePullT3Projects(visibleItems: PullT3Item[], allItems: PullT3Item[] = visibleItems): PullT3ProjectSummary[] {
+  const groups = new Map<string, PullT3ProjectSummary>();
+
+  for (const item of visibleItems) {
+    const group = groups.get(item.project) ?? {
+      project: item.project,
+      conversations: 0,
+      messages: 0,
+      subagents: 0,
+    };
+    group.conversations += 1;
+    group.messages += item.messageCount;
+    groups.set(item.project, group);
+  }
+
+  for (const item of allItems) {
+    if (item.kind !== "subagent") continue;
+    const group = groups.get(item.project) ?? {
+      project: item.project,
+      conversations: 0,
+      messages: 0,
+      subagents: 0,
+    };
+    group.subagents += 1;
+    groups.set(item.project, group);
+  }
+
+  return [...groups.values()].sort((a, b) => a.project.localeCompare(b.project));
 }
 
 export function parsePullT3Selection(input: string, max: number): number[] {

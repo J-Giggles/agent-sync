@@ -9,7 +9,13 @@ import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
-import { formatPullT3Result, runPullT3, sourceConversationKey, type PullT3Options } from "./core/t3-import.js";
+import {
+  formatPullT3Result,
+  runPullT3,
+  sourceConversationKey,
+  summarizePullT3Projects,
+  type PullT3Options,
+} from "./core/t3-import.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
 import { enabledProviders } from "./providers/index.js";
@@ -212,23 +218,23 @@ async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOpti
   if (preview.items.length === 0) return [];
 
   let scopedItems = preview.items;
+  const allPreview = options.includeSubagents
+    ? preview
+    : await runPullT3(config, {
+        ...pullT3OptionsFromCli({ ...options, write: false }),
+        dryRun: true,
+        exportPath: undefined,
+        includeSubagents: true,
+      });
 
   if (!options.project) {
-    const projectGroups = new Map<string, { conversations: number; messages: number; subagents: number }>();
-    for (const item of preview.items) {
-      const group = projectGroups.get(item.project) ?? { conversations: 0, messages: 0, subagents: 0 };
-      group.conversations += 1;
-      group.messages += item.messageCount;
-      if (item.kind === "subagent") group.subagents += 1;
-      projectGroups.set(item.project, group);
-    }
-    const projects = [...projectGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const projects = summarizePullT3Projects(preview.items, allPreview.items);
     const selectedProjects = await multiselect({
       message: "Select project(s) to browse",
-      options: projects.map(([project, group]) => ({
-        value: project,
-        label: project,
-        hint: `${group.conversations} chats, ${group.messages} messages${group.subagents > 0 ? `, ${group.subagents} subagents` : ""}`,
+      options: projects.map((group) => ({
+        value: group.project,
+        label: group.project,
+        hint: `${group.conversations} chats, ${group.messages} messages${group.subagents > 0 ? `, ${group.subagents} subagents${options.includeSubagents ? "" : " hidden"}` : ""}`,
       })),
       required: false,
     });
@@ -249,10 +255,11 @@ async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOpti
     options: scopedItems.map((item) => {
       const date = item.title.replace(/^\[agent-sync\] [^/]+ \/ [^/]+ \/ /, "");
       const kind = item.kind === "subagent" ? `subagent:${item.agentRole ?? "unknown"}` : "top-level";
+      const runtimeProvider = item.t3ProviderName ? `, t3 provider ${item.t3ProviderName}` : "";
       return {
         value: sourceConversationKey(item.provider, item.providerConversationId),
         label: `${item.provider} / ${item.project} / ${date}`,
-        hint: `${kind}, ${item.messageCount} messages, source ${item.providerConversationId}`,
+        hint: `${kind}${runtimeProvider}, ${item.messageCount} messages, source ${item.providerConversationId}`,
       };
     }),
     required: false,
