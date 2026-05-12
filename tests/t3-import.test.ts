@@ -281,6 +281,58 @@ describe("runPullT3", () => {
     expect(JSON.parse(messageRows[0].attachments_json).agentSyncImport.sourceArchivePath).toContain("archive");
   });
 
+  it("imports large conversations without exceeding command argument limits", async () => {
+    const root = await makeTempRoot("agent-sync-t3-large-import");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    await createFixtureDatabase(databasePath);
+    const archiveDir = join(config.centralArchiveDir, "large-project", "2026", "05", "12");
+    await mkdir(archiveDir, { recursive: true });
+    await writeFile(
+      join(archiveDir, "codex-20260512T120000Z-stable-large.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        provider: "codex",
+        providerConversationId: "codex-large-1",
+        stableId: "stable-large",
+        project: {
+          name: "large-project",
+          root: "/work/large-project",
+          matchedBy: "cwd",
+        },
+        startedAt: "2026-05-12T12:00:00.000Z",
+        updatedAt: "2026-05-12T13:00:00.000Z",
+        source: {
+          path: "/provider/codex/large.jsonl",
+          kind: "jsonl",
+        },
+        messages: Array.from({ length: 900 }, (_, index) => ({
+          id: `m${index}`,
+          role: index % 2 === 0 ? "user" : "assistant",
+          createdAt: "2026-05-12T12:00:00.000Z",
+          text: `large message ${index} ${"x".repeat(200)}`,
+        })),
+        metadata: {
+          cwd: "/work/large-project",
+        },
+      })
+    );
+
+    const result = await runPullT3(config, {
+      databasePath,
+      dryRun: false,
+      project: "large-project",
+      provider: "codex",
+    });
+    const messageRows = await sqliteRows<{ count: number }>(
+      databasePath,
+      "select count(*) as count from projection_thread_messages"
+    );
+
+    expect(result.imported).toBe(1);
+    expect(messageRows[0].count).toBe(900);
+  });
+
   it("deduplicates archive copies with the same provider conversation id", async () => {
     const root = await makeTempRoot("agent-sync-t3-deduplicate");
     const config = await fixtureConfig(root);

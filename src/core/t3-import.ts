@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, extname, join, relative } from "node:path";
@@ -565,10 +565,31 @@ async function importRecords(databasePath: string, records: T3ImportRecord[], ex
 
   statements.push("commit;");
   if (imported > 0) {
-    await execFileAsync("sqlite3", [databasePath, statements.join("\n")], { maxBuffer: 128 * 1024 * 1024 });
+    await runSqliteScript(databasePath, statements.join("\n"));
   }
 
   return imported;
+}
+
+async function runSqliteScript(databasePath: string, script: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("sqlite3", [databasePath], {
+      stdio: ["pipe", "ignore", "pipe"],
+    });
+    const stderr: Buffer[] = [];
+
+    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`sqlite3 exited with code ${code}: ${Buffer.concat(stderr).toString("utf8").trim()}`));
+    });
+    child.stdin.end(script);
+  });
 }
 
 async function exportRecords(exportPath: string, records: T3ImportRecord[]): Promise<number> {
