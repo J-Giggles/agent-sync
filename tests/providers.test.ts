@@ -1,5 +1,5 @@
 import { mkdir, symlink, utimes, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { claudeCodeProvider } from "../src/providers/claude-code.js";
@@ -232,6 +232,29 @@ describe("provider adapters", () => {
     const conversation = await claudeCodeProvider.read(refs[0]);
 
     expect(conversation.provider).toBe("claude-code");
+    expect(conversation.messages[0].text).toBe("hello");
+  });
+
+  it("claude-code provider discovers project UUID sessions and ignores plugin/cache files", async () => {
+    const root = join(tmpdir(), `agent-sync-claude-projects-${crypto.randomUUID()}`);
+    const encodedHome = `-${homedir().slice(1).replaceAll("/", "-")}`;
+    const projectDir = join(root, "projects", `${encodedHome}-code-giggabit-invoice`);
+    const pluginDir = join(projectDir, "vercel-plugin");
+    const cacheDir = join(root, "cache");
+    const sessionPath = join(projectDir, "9bed6517-8599-417d-aa82-6f945926df2c.jsonl");
+    await mkdir(pluginDir, { recursive: true });
+    await mkdir(cacheDir, { recursive: true });
+    await writeFile(sessionPath, '{"uuid":"m1","type":"user","message":{"content":"hello"},"timestamp":"2026-05-12T10:00:00.000Z"}\n');
+    await writeFile(join(pluginDir, "skill-injections.jsonl"), '{"content":"not a chat"}\n');
+    await writeFile(join(cacheDir, "my-closed-issues.json"), "{}\n");
+    const config = configWithProviderPath("claude-code", root);
+
+    const refs = await claudeCodeProvider.discover(config);
+    const conversation = await claudeCodeProvider.read(refs[0]);
+
+    expect(refs.map((ref) => ref.path)).toEqual([sessionPath]);
+    expect(conversation.metadata.cwd).toBe(join(homedir(), "code", "giggabit-invoice"));
+    expect(conversation.messages[0].role).toBe("user");
     expect(conversation.messages[0].text).toBe("hello");
   });
 
