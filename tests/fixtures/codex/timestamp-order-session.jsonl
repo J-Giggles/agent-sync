@@ -1,0 +1,2 @@
+{"id":"m1","role":"user","content":"numeric latest","timestamp":"2026-05-12T09:00:00.000Z","cwd":"/work/app"}
+{"id":"m2","role":"assistant","content":"lexically later but numerically earlier","timestamp":"2026-05-12T10:00:00.000+02:00","cwd":"/work/app"}

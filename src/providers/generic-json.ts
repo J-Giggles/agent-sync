@@ -1,5 +1,6 @@
-import { stat, readFile } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { readFile, stat } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, extname, join } from "node:path";
 import fg from "fast-glob";
 import { createStableId } from "../core/fingerprints.js";
 import type { MessageRole, NormalizedConversation, NormalizedMessage, ProviderId, RawConversationRef, SyncConfig } from "../types.js";
@@ -49,13 +50,18 @@ function sourceKindForPath(path: string): RawConversationRef["kind"] {
   return extname(path).toLowerCase() === ".jsonl" ? "jsonl" : "json";
 }
 
-async function pathExists(path: string): Promise<boolean> {
+async function statIfAccessible(path: string) {
   try {
-    await stat(path);
-    return true;
+    return await stat(path);
   } catch {
-    return false;
+    return undefined;
   }
+}
+
+function expandHomePath(path: string): string {
+  if (path === "~") return homedir();
+  if (path.startsWith("~/")) return join(homedir(), path.slice(2));
+  return path;
 }
 
 export async function discoverJsonRefs(
@@ -67,12 +73,17 @@ export async function discoverJsonRefs(
   const refs: RawConversationRef[] = [];
 
   for (const path of paths) {
-    if (!(await pathExists(path))) continue;
+    const expandedPath = expandHomePath(path);
+    const pathStat = await statIfAccessible(expandedPath);
+    if (!pathStat) continue;
 
-    const pathStat = await stat(path);
     const files = pathStat.isDirectory()
-      ? await fg(["**/*.json", "**/*.jsonl"], { cwd: path, absolute: true, onlyFiles: true })
-      : [path];
+      ? await fg(["**/*{chat,chats,conversation,conversations,session,sessions}*.{json,jsonl}"], {
+          cwd: expandedPath,
+          absolute: true,
+          onlyFiles: true,
+        })
+      : [expandedPath];
 
     for (const file of files) {
       const extension = extname(file).toLowerCase();
@@ -94,13 +105,32 @@ export async function readJsonRecords(ref: RawConversationRef): Promise<unknown[
   const raw = await readFile(ref.path, "utf8");
 
   if (ref.kind === "jsonl") {
-    return raw
-      .split(/\r?\n/)
-      .filter((line) => line.trim().length > 0)
-      .map((line) => JSON.parse(line) as unknown);
+    const records: unknown[] = [];
+    const lines = raw.split(/\r?\n/);
+
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (line.trim().length === 0) continue;
+
+      try {
+        records.push(JSON.parse(line) as unknown);
+      } catch (error) {
+        throw new Error(`Failed to parse JSONL ${ref.path}:${index + 1}: ${(error as Error).message}`, {
+          cause: error,
+        });
+      }
+    }
+
+    return records;
   }
 
-  const parsed = JSON.parse(raw) as unknown;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new Error(`Failed to parse JSON ${ref.path}: ${(error as Error).message}`, { cause: error });
+  }
+
   return Array.isArray(parsed) ? parsed : [parsed];
 }
 
@@ -156,20 +186,34 @@ function fieldFromConversationOrMessages(
   return stringField(conversation, field) ?? messages.map((message) => stringField(message, field)).find(Boolean);
 }
 
-function latestTimestamp(messages: NormalizedMessage[]): string | undefined {
-  return messages
-    .map((message) => message.createdAt)
-    .filter((value): value is string => Boolean(value))
-    .sort()
-    .at(-1);
+function latestParseableTimestamp(timestamps: Array<string | undefined>): string | undefined {
+  let latest: { raw: string; time: number } | undefined;
+
+  for (const timestamp of timestamps) {
+    if (!timestamp) continue;
+
+    const time = Date.parse(timestamp);
+    if (!Number.isFinite(time)) continue;
+
+    if (!latest || time > latest.time) {
+      latest = { raw: timestamp, time };
+    }
+  }
+
+  return latest?.raw;
 }
 
-export function buildConversation(
+function updateTimestampFrom(value: unknown): string | undefined {
+  return stringField(value, "updatedAt") ?? stringField(value, "updated_at");
+}
+
+export async function buildConversation(
   provider: ProviderId,
   ref: RawConversationRef,
   records: unknown[],
   options: BuildConversationOptions = {}
-): NormalizedConversation {
+): Promise<NormalizedConversation> {
+  const sourceMtime = (await stat(ref.path)).mtime.toISOString();
   const conversation = conversationObjectFrom(records);
   const messageRecords = messageRecordsFrom(records);
   const firstMessageRecord = messageRecords[0];
@@ -181,7 +225,8 @@ export function buildConversation(
     raw: record,
   }));
 
-  const startedAt = timestampFrom(conversation) ?? messages[0]?.createdAt ?? new Date(0).toISOString();
+  const conversationTimestamp = timestampFrom(conversation);
+  const startedAt = conversationTimestamp ?? messages[0]?.createdAt ?? sourceMtime;
   const providerConversationId =
     stringField(conversation, options.idField) ??
     stringField(firstMessageRecord, options.idField) ??
@@ -202,7 +247,12 @@ export function buildConversation(
     stableId: createStableId(provider, providerConversationId, ref.path),
     title: stringField(conversation, options.titleField),
     startedAt,
-    updatedAt: latestTimestamp(messages),
+    updatedAt:
+      latestParseableTimestamp([
+        conversationTimestamp,
+        updateTimestampFrom(conversation),
+        ...messages.map((message) => message.createdAt),
+      ]) ?? sourceMtime,
     source: {
       path: ref.path,
       kind: ref.kind,
