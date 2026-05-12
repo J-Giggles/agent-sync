@@ -422,7 +422,7 @@ program.command("doctor").description("Check provider and archive configuration"
 program.parse();
 ```
 
-- [ ] **Step 5: Verify tests pass**
+- [x] **Step 5: Verify tests pass**
 
 Run:
 
@@ -433,7 +433,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
@@ -1183,7 +1183,7 @@ git commit -m "feat: add local provider adapters"
 - Test: `tests/sync.test.ts`
 - Modify: `src/cli.ts`
 
-- [ ] **Step 1: Write failing sync integration test**
+- [x] **Step 1: Write failing sync integration test**
 
 Create `tests/sync.test.ts`:
 
@@ -1239,7 +1239,7 @@ describe("runSync", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run:
 
@@ -1249,7 +1249,7 @@ npm test -- tests/sync.test.ts
 
 Expected: FAIL because `src/core/sync.ts` does not exist.
 
-- [ ] **Step 3: Implement sync pipeline**
+- [x] **Step 3: Implement sync pipeline**
 
 Create `src/core/sync.ts` with:
 
@@ -1262,7 +1262,7 @@ Create `src/core/sync.ts` with:
 - parent directory creation before writes
 - `.agent-sync-manifest.json` written under `centralArchiveDir`
 
-- [ ] **Step 4: Wire `sync` command**
+- [x] **Step 4: Wire `sync` command**
 
 Modify `src/cli.ts` so `agent-sync sync` calls `runSync`, prints written/skipped counts, prints warnings/errors, and exits non-zero only for fatal config errors.
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
+import { runSync } from "./core/sync.js";
 import { loadConfig } from "./config.js";
 
 const program = new Command();
@@ -8,7 +9,15 @@ program.name("agent-sync").description("Sync local agent chat histories").versio
 
 program.command("sync").description("Run one-shot chat sync").action(async () => {
   const config = await loadConfig();
-  console.log(`sync is not implemented yet: ${Object.keys(config.providers).length} providers configured`);
+  const result = await runSync(config);
+  console.log(`written: ${result.written}`);
+  console.log(`skipped: ${result.skipped}`);
+
+  for (const diagnostic of result.diagnostics) {
+    const source = diagnostic.sourcePath ? ` ${diagnostic.sourcePath}` : "";
+    const provider = diagnostic.provider ? ` ${diagnostic.provider}` : "";
+    console.error(`${diagnostic.level}:${provider}${source} ${diagnostic.message}`);
+  }
 });
 
 program.command("watch").description("Watch provider files and sync changes").action(async () => {
