@@ -1,0 +1,2 @@
+{"uuid":"m1","type":"user","message":{"content":"hello"},"timestamp":"2026-05-12T11:00:00.000Z","cwd":"/work/app"}
+{"uuid":"m2","type":"assistant","message":{"content":"hi"},"timestamp":"2026-05-12T11:01:00.000Z","cwd":"/work/app"}

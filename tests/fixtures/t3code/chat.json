@@ -1,0 +1,9 @@
+{
+  "id": "t3-1",
+  "title": "T3 sync",
+  "cwd": "/work/app",
+  "createdAt": "2026-05-12T13:00:00.000Z",
+  "messages": [
+    { "id": "m1", "role": "assistant", "content": "t3 hello" }
+  ]
+}
