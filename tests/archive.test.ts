@@ -72,4 +72,10 @@ describe("archive paths", () => {
       "Invalid conversation startedAt: not-a-date",
     );
   });
+
+  it("throws a clear error for impossible calendar startedAt values", () => {
+    expect(() => archiveTargets(config, { ...conversation, startedAt: "2026-02-30T00:00:00.000Z" })).toThrow(
+      "Invalid conversation startedAt: 2026-02-30T00:00:00.000Z",
+    );
+  });
 });

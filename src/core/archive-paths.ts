@@ -19,7 +19,7 @@ function slug(value: string): string {
 
 function dateParts(iso: string) {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
+  if (Number.isNaN(date.getTime()) || date.toISOString() !== iso) {
     throw new Error(`Invalid conversation startedAt: ${iso}`);
   }
 
