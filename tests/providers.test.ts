@@ -293,6 +293,39 @@ describe("provider adapters", () => {
     expect(conversation.metadata.workspace).toBe("/work/app");
   });
 
+  it("cursor provider discovers project agent transcripts and infers the project root", async () => {
+    const root = join(tmpdir(), `agent-sync-cursor-projects-${crypto.randomUUID()}`);
+    const projectDir = join(root, "home-jgigg-code-mountain-technologies-lifepass-neon-monorepo");
+    const transcriptDir = join(projectDir, "agent-transcripts", "f4bed908-ce56-4cc7-b0e5-f4e592c70fee");
+    const transcriptPath = join(transcriptDir, "f4bed908-ce56-4cc7-b0e5-f4e592c70fee.jsonl");
+    await mkdir(transcriptDir, { recursive: true });
+    await writeFile(
+      transcriptPath,
+      '{"role":"user","message":{"content":[{"text":"cursor transcript hello"}]}}\n' +
+        '{"role":"assistant","message":{"content":[{"text":"cursor transcript response"}]}}\n'
+    );
+    const config = configWithProviderPath("cursor", root);
+
+    const refs = await cursorProvider.discover(config);
+    const conversation = await cursorProvider.read(refs[0]);
+
+    expect(refs).toEqual([
+      {
+        provider: "cursor",
+        path: transcriptPath,
+        kind: "jsonl",
+        idHint: "f4bed908-ce56-4cc7-b0e5-f4e592c70fee",
+      },
+    ]);
+    expect(conversation.provider).toBe("cursor");
+    expect(conversation.providerConversationId).toBe("f4bed908-ce56-4cc7-b0e5-f4e592c70fee");
+    expect(conversation.messages.map((message) => message.text)).toEqual([
+      "cursor transcript hello",
+      "cursor transcript response",
+    ]);
+    expect(conversation.metadata.cwd).toBe("/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo");
+  });
+
   it("t3code provider reads JSON conversations", async () => {
     const config = configWithProviderPath("t3code", join(fixtureRoot, "t3code"));
 
