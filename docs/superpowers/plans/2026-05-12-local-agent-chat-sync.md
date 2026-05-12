@@ -1405,7 +1405,7 @@ git commit -m "feat: add watch and diagnostics"
 - Create: `README.md`
 - Modify: `docs/superpowers/plans/2026-05-12-local-agent-chat-sync.md`
 
-- [ ] **Step 1: Write README**
+- [x] **Step 1: Write README**
 
 Create `README.md`:
 
@@ -1449,7 +1449,7 @@ Unmatched chats are written only to `unknown-project/YYYY/MM/DD/` for later revi
 Watch mode uses the same sync pipeline as one-shot sync, so archive behavior stays consistent.
 ```
 
-- [ ] **Step 2: Run full verification**
+- [x] **Step 2: Run full verification**
 
 Run:
 
@@ -1462,11 +1462,11 @@ node dist/src/cli.js doctor
 
 Expected: typecheck, tests, and build pass. `doctor` may report warnings for missing provider paths but must not crash.
 
-- [ ] **Step 3: Mark plan checkboxes as complete**
+- [x] **Step 3: Mark plan checkboxes as complete**
 
 Update this plan file as tasks are finished by changing completed steps from `- [ ]` to `- [x]`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
