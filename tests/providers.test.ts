@@ -51,6 +51,8 @@ describe("provider adapters", () => {
 
     expect(conversation.provider).toBe("cursor");
     expect(conversation.title).toBe("Cursor sync");
+    expect(conversation.messages).toHaveLength(1);
+    expect(conversation.messages[0].text).toBe("cursor hello");
     expect(conversation.metadata.workspace).toBe("/work/app");
   });
 
