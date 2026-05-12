@@ -45,6 +45,17 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
   }
 }
 
+function validateManifestShape(manifest: SyncManifest, manifestPath: string): StatusResult | undefined {
+  if (manifest.conversations !== undefined && !Array.isArray(manifest.conversations)) {
+    return {
+      level: "error",
+      lines: [`Invalid sync manifest at ${manifestPath}: conversations must be an array when present.`],
+    };
+  }
+
+  return undefined;
+}
+
 async function countJsonAndMarkdownFiles(root: string): Promise<number> {
   try {
     const entries = await readdir(root, { recursive: true, withFileTypes: true });
@@ -88,6 +99,9 @@ export async function readStatus(config: SyncConfig): Promise<StatusResult> {
       lines: [`Could not read sync manifest at ${manifestPath}: ${message}`],
     };
   }
+
+  const shapeError = validateManifestShape(manifest, manifestPath);
+  if (shapeError) return shapeError;
 
   const latestConversations = (manifest.conversations ?? [])
     .filter((conversation) => Array.isArray(conversation.outputs) && conversation.outputs.length > 0)

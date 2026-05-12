@@ -176,6 +176,76 @@ describe("runSync", () => {
     expect(archiveFiles(await listFiles(join(projectRoot, ".agents", "chats")))).toHaveLength(2);
   });
 
+  it("preserves unscoped provider manifest conversations during scoped sync", async () => {
+    const root = await makeTempRoot("agent-sync-scoped-manifest");
+    const projectsRoot = join(root, "projects");
+    const codexDir = join(root, "codex-provider");
+    const cursorDir = join(root, "cursor-provider");
+    const projectRoot = join(projectsRoot, "app");
+    const archive = join(root, "archive");
+    const unknown = join(root, "unknown-project");
+
+    await mkdir(codexDir, { recursive: true });
+    await mkdir(cursorDir, { recursive: true });
+    await mkdir(projectRoot, { recursive: true });
+    await writeFile(join(projectRoot, "package.json"), "{}\n");
+    await writeFile(
+      join(codexDir, "codex-session.jsonl"),
+      `${JSON.stringify({
+        sessionId: "codex-1",
+        role: "user",
+        content: "codex full",
+        timestamp: "2026-05-12T10:00:00.000Z",
+        cwd: projectRoot,
+      })}\n`
+    );
+    await writeFile(
+      join(cursorDir, "cursor-session.jsonl"),
+      `${JSON.stringify({
+        id: "cursor-1",
+        role: "user",
+        content: "cursor full",
+        timestamp: "2026-05-12T11:00:00.000Z",
+        workspace: projectRoot,
+      })}\n`
+    );
+
+    const config: SyncConfig = {
+      projectRoots: [projectsRoot],
+      centralArchiveDir: archive,
+      unknownProjectDir: unknown,
+      projectArchiveDir: ".agents/chats",
+      providers: {
+        codex: { enabled: true, paths: [codexDir] },
+        cursor: { enabled: true, paths: [cursorDir] },
+      },
+    };
+
+    await runSync(config);
+    await writeFile(
+      join(codexDir, "codex-session.jsonl"),
+      `${JSON.stringify({
+        sessionId: "codex-1",
+        role: "user",
+        content: "codex scoped",
+        timestamp: "2026-05-12T12:00:00.000Z",
+        cwd: projectRoot,
+      })}\n`
+    );
+
+    await runSync(config, { providerIds: ["codex"] });
+
+    const manifest = JSON.parse(await readFile(join(archive, ".agent-sync-manifest.json"), "utf8")) as {
+      conversations: Array<{ provider: string; sourcePath: string }>;
+    };
+    expect(manifest.conversations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ provider: "codex", sourcePath: join(codexDir, "codex-session.jsonl") }),
+        expect.objectContaining({ provider: "cursor", sourcePath: join(cursorDir, "cursor-session.jsonl") }),
+      ])
+    );
+  });
+
   it("expands home-relative archive roots before writing", async () => {
     const originalHome = process.env.HOME;
     const root = await makeTempRoot("agent-sync-home-expansion");

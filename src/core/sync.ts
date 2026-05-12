@@ -73,25 +73,61 @@ async function writeRenderedTargets(targets: RenderedTarget[]): Promise<Pick<Syn
   return { written, skipped };
 }
 
-async function writeManifest(config: SyncConfig, result: SyncResult): Promise<void> {
+type SyncManifest = {
+  updatedAt?: unknown;
+  schemaVersion?: unknown;
+  written?: unknown;
+  skipped?: unknown;
+  diagnostics?: unknown;
+  conversations?: unknown;
+};
+
+function mergeScopedConversations(
+  existingConversations: unknown,
+  scopedProviderIds: ProviderId[] | undefined,
+  scopedConversations: SyncedConversationOutput[]
+): SyncedConversationOutput[] {
+  if (!scopedProviderIds) return scopedConversations;
+
+  const scopedProviders = new Set(scopedProviderIds);
+  const preservedConversations = Array.isArray(existingConversations)
+    ? existingConversations.filter((conversation): conversation is SyncedConversationOutput => {
+        return (
+          typeof conversation === "object" &&
+          conversation !== null &&
+          "provider" in conversation &&
+          typeof conversation.provider === "string" &&
+          !scopedProviders.has(conversation.provider as ProviderId)
+        );
+      })
+    : [];
+
+  return [...preservedConversations, ...scopedConversations];
+}
+
+async function writeManifest(config: SyncConfig, result: SyncResult, options: RunSyncOptions): Promise<void> {
   const manifestPath = `${config.centralArchiveDir}/.agent-sync-manifest.json`;
+  let existing: SyncManifest | undefined;
+  try {
+    existing = JSON.parse(await readFile(manifestPath, "utf8")) as SyncManifest;
+  } catch {
+    // Missing or malformed manifests are replaced below.
+  }
+
   const summary = {
     schemaVersion: 1,
     written: result.written,
     skipped: result.skipped,
     diagnostics: result.diagnostics,
-    conversations: result.conversations,
+    conversations: mergeScopedConversations(existing?.conversations, options.providerIds, result.conversations),
   };
   let updatedAt = new Date().toISOString();
 
-  try {
-    const existing = JSON.parse(await readFile(manifestPath, "utf8")) as { updatedAt?: unknown };
+  if (existing) {
     const { updatedAt: existingUpdatedAt, ...existingSummary } = existing;
     if (JSON.stringify(existingSummary) === JSON.stringify(summary) && typeof existingUpdatedAt === "string") {
       updatedAt = existingUpdatedAt;
     }
-  } catch {
-    // Missing or malformed manifests are replaced below.
   }
 
   await writeIfChanged(
@@ -209,6 +245,6 @@ export async function runSync(config: SyncConfig, options: RunSyncOptions = {}):
   }
 
   const result = { written, skipped, diagnostics, conversations };
-  await writeManifest(archiveConfig, result);
+  await writeManifest(archiveConfig, result, options);
   return result;
 }
