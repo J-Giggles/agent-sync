@@ -80,17 +80,17 @@ node dist/src/cli.js sync
 # Watch enabled provider paths and sync changed providers after a short debounce.
 node dist/src/cli.js watch
 
-# Preview normalized archive conversations that could be surfaced in T3.
+# Interactively choose a project and chats to preview for T3.
 node dist/src/cli.js pull:t3 --dry-run
 
-# Narrow the preview before exporting or writing.
+# Start selection inside one project.
 node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
 
-# List every planned conversation instead of only grouped totals.
-node dist/src/cli.js pull:t3 --dry-run --verbose
+# Explicitly preview every matching conversation without selection.
+node dist/src/cli.js pull:t3 --dry-run --all
 
-# Export a T3 projection import plan without touching the T3 database.
-node dist/src/cli.js pull:t3 --export ./t3-import.ndjson
+# Export selected chats without touching the T3 database.
+node dist/src/cli.js pull:t3 --project agent-sync --export ./t3-import.ndjson
 ```
 
 ## Archive Layout
@@ -135,29 +135,35 @@ The default is private-by-default. Chat archives stay ignored unless you deliber
 
 ## T3 Archive Pull
 
-`pull:t3` reads normalized JSON conversations from the configured central archive and `unknownProjectDir`. It does not reread provider sources. By default it is a dry run, so this is the safest starting point:
+`pull:t3` reads normalized JSON conversations from the configured central archive and `unknownProjectDir`. It does not reread provider sources. By default it opens an interactive selector so you choose the project and chats before any dry run, export, or write applies:
 
 ```bash
 node dist/src/cli.js pull:t3 --dry-run
 ```
 
-Use filters before exporting or importing:
+Use filters to narrow the selector before exporting or importing:
 
 ```bash
 node dist/src/cli.js pull:t3 --dry-run --project agent-sync --provider codex --since 2026-05-12 --limit 10
 ```
 
-To hand the projection data to another tool without writing to T3, export NDJSON:
+To hand selected projection data to another tool without writing to T3, export NDJSON:
 
 ```bash
-node dist/src/cli.js pull:t3 --export ./t3-import.ndjson
+node dist/src/cli.js pull:t3 --project agent-sync --export ./t3-import.ndjson
+```
+
+Bulk mode is explicit. Pass `--all` only when you intentionally want every matching conversation after filters:
+
+```bash
+node dist/src/cli.js pull:t3 --dry-run --project agent-sync --all
 ```
 
 SQLite writes are opt-in and require an explicit `--database` path. Only use `--write` after reviewing a dry run or export, and prefer a copy of T3's database until you are comfortable with the result:
 
 ```bash
 cp ~/.t3/userdata/state.sqlite /tmp/t3-agent-sync-test.sqlite
-node dist/src/cli.js pull:t3 --write --database /tmp/t3-agent-sync-test.sqlite --limit 5
+node dist/src/cli.js pull:t3 --project agent-sync --write --database /tmp/t3-agent-sync-test.sqlite
 ```
 
 Imported rows use deterministic `agent-sync:` IDs and metadata markers, so rerunning the command does not duplicate already-imported archive conversations.

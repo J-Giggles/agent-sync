@@ -2,13 +2,14 @@
 import { readdir, readFile } from "node:fs/promises";
 import { realpathSync } from "node:fs";
 import { extname, join } from "node:path";
+import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
-import { formatPullT3Result, runPullT3 } from "./core/t3-import.js";
+import { formatPullT3Result, parsePullT3Selection, runPullT3, sourceConversationKey, type PullT3Options } from "./core/t3-import.js";
 import { runWatch } from "./core/watch.js";
 import { loadConfig } from "./config.js";
 import { enabledProviders } from "./providers/index.js";
@@ -38,6 +39,19 @@ export type StatusResult = {
 };
 
 const program = new Command();
+
+type PullT3CliOptions = {
+  dryRun?: boolean;
+  write?: boolean;
+  database?: string;
+  export?: string;
+  project?: string;
+  provider?: string;
+  since?: string;
+  limit?: number;
+  verbose?: boolean;
+  all?: boolean;
+};
 
 function printDiagnostic(diagnostic: SyncDiagnostic): void {
   const source = diagnostic.sourcePath ? ` ${diagnostic.sourcePath}` : "";
@@ -171,6 +185,73 @@ async function printStatus(config: SyncConfig): Promise<void> {
   }
 }
 
+function pullT3OptionsFromCli(options: PullT3CliOptions): PullT3Options {
+  return {
+    dryRun: options.write ? false : options.dryRun ?? true,
+    databasePath: options.database,
+    exportPath: options.export,
+    project: options.project,
+    provider: options.provider,
+    since: options.since,
+    limit: options.limit,
+  };
+}
+
+async function selectPullT3SourceKeys(config: SyncConfig, options: PullT3CliOptions): Promise<string[]> {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    throw new Error("pull:t3 uses interactive selection by default. Run in a TTY or pass --all for explicit bulk mode.");
+  }
+
+  const preview = await runPullT3(config, {
+    ...pullT3OptionsFromCli({ ...options, write: false }),
+    dryRun: true,
+    exportPath: undefined,
+  });
+  if (preview.items.length === 0) return [];
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    let scopedItems = preview.items;
+
+    if (!options.project) {
+      const projectGroups = new Map<string, { conversations: number; messages: number }>();
+      for (const item of preview.items) {
+        const group = projectGroups.get(item.project) ?? { conversations: 0, messages: 0 };
+        group.conversations += 1;
+        group.messages += item.messageCount;
+        projectGroups.set(item.project, group);
+      }
+      const projects = [...projectGroups.entries()].sort(([a], [b]) => a.localeCompare(b));
+      console.log("Select project(s) to browse:");
+      projects.forEach(([project, group], index) => {
+        console.log(`${index + 1}. ${project} (${group.conversations} conversations, ${group.messages} messages)`);
+      });
+
+      const projectAnswer = await rl.question("Projects [numbers/ranges, all, blank to cancel]: ");
+      const selectedProjectIndexes = parsePullT3Selection(projectAnswer, projects.length);
+      const selectedProjects = new Set(selectedProjectIndexes.map((index) => projects[index][0]));
+      scopedItems = preview.items.filter((item) => selectedProjects.has(item.project));
+    }
+
+    if (scopedItems.length === 0) return [];
+
+    console.log("Select chat(s) to import:");
+    scopedItems.forEach((item, index) => {
+      console.log(
+        `${index + 1}. ${item.provider} / ${item.project} / ${item.title.replace(/^\[agent-sync\] [^/]+ \/ [^/]+ \/ /, "")} (${item.messageCount} messages, source ${item.providerConversationId})`
+      );
+    });
+
+    const chatAnswer = await rl.question("Chats [numbers/ranges, all, blank to cancel]: ");
+    const selectedChatIndexes = parsePullT3Selection(chatAnswer, scopedItems.length);
+    return selectedChatIndexes.map((index) =>
+      sourceConversationKey(scopedItems[index].provider, scopedItems[index].providerConversationId)
+    );
+  } finally {
+    rl.close();
+  }
+}
+
 export function isDirectCliExecution(argvPath: string | undefined, moduleUrl: string): boolean {
   if (!argvPath) return false;
 
@@ -217,31 +298,18 @@ program
   .option("--since <date>", "Only include conversations started at or after this date")
   .option("--limit <n>", "Limit the number of conversations considered", (value) => Number.parseInt(value, 10))
   .option("--verbose", "List every planned conversation")
+  .option("--all", "Skip interactive selection and apply the command to every matching conversation")
   .action(
-    async (options: {
-      dryRun?: boolean;
-      write?: boolean;
-      database?: string;
-      export?: string;
-      project?: string;
-      provider?: string;
-      since?: string;
-      limit?: number;
-      verbose?: boolean;
-    }) => {
+    async (options: PullT3CliOptions) => {
       if (options.write && !options.database) {
         throw new Error("Refusing to write without an explicit --database path. Start with --dry-run or pass --database <copy-of-t3.sqlite>.");
       }
 
       const config = await loadConfig();
+      const selectedSourceConversationKeys = options.all ? undefined : await selectPullT3SourceKeys(config, options);
       const result = await runPullT3(config, {
-        dryRun: options.write ? false : options.dryRun ?? true,
-        databasePath: options.database,
-        exportPath: options.export,
-        project: options.project,
-        provider: options.provider,
-        since: options.since,
-        limit: options.limit,
+        ...pullT3OptionsFromCli(options),
+        selectedSourceConversationKeys,
       });
 
       for (const line of formatPullT3Result(result, { verbose: options.verbose })) console.log(line);

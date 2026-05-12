@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { formatPullT3Result, runPullT3 } from "../src/core/t3-import.js";
+import { formatPullT3Result, parsePullT3Selection, runPullT3 } from "../src/core/t3-import.js";
 import type { SyncConfig } from "../src/types.js";
 
 const execFileAsync = promisify(execFile);
@@ -78,6 +78,25 @@ describe("runPullT3", () => {
         provider: "codex",
         project: "agent-sync",
         providerConversationId: "codex-original-1",
+      })
+    );
+  });
+
+  it("filters archive conversations by selected source conversation keys", async () => {
+    const root = await makeTempRoot("agent-sync-t3-selected-keys");
+    const config = await fixtureConfig(root);
+
+    const result = await runPullT3(config, {
+      dryRun: true,
+      selectedSourceConversationKeys: ["codex:codex-original-1"],
+    });
+
+    expect(result.planned).toBe(1);
+    expect(result.items[0]).toEqual(
+      expect.objectContaining({
+        provider: "codex",
+        providerConversationId: "codex-original-1",
+        title: "[agent-sync] codex / agent-sync / 2026-05-12",
       })
     );
   });
@@ -222,5 +241,19 @@ describe("runPullT3", () => {
     );
 
     expect(lines).toContain("- would import: [agent-sync] codex / agent-sync / 2026-05-12 (2 messages, source codex-original-1)");
+  });
+
+  it("parses interactive number and range selections", () => {
+    expect(parsePullT3Selection("1,3-5", 6)).toEqual([0, 2, 3, 4]);
+    expect(parsePullT3Selection("all", 3)).toEqual([0, 1, 2]);
+    expect(parsePullT3Selection(" 2 , 2 , 1 ", 3)).toEqual([1, 0]);
+    expect(parsePullT3Selection("", 3)).toEqual([]);
+  });
+
+  it("rejects invalid interactive selections", () => {
+    expect(() => parsePullT3Selection("0", 3)).toThrow("Selection 0 is outside the valid range 1-3.");
+    expect(() => parsePullT3Selection("4", 3)).toThrow("Selection 4 is outside the valid range 1-3.");
+    expect(() => parsePullT3Selection("3-2", 3)).toThrow("Invalid descending range: 3-2.");
+    expect(() => parsePullT3Selection("abc", 3)).toThrow("Invalid selection token: abc.");
   });
 });

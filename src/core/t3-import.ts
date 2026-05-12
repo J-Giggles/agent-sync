@@ -17,6 +17,7 @@ export type PullT3Options = {
   provider?: string;
   since?: string;
   limit?: number;
+  selectedSourceConversationKeys?: string[];
 };
 
 export type PullT3Item = {
@@ -217,6 +218,12 @@ function filterArchived(archived: ArchivedConversation[], options: PullT3Options
   const filtered = archived.filter(({ conversation, projectName }) => {
     if (options.project && projectName !== options.project) return false;
     if (options.provider && conversation.provider !== options.provider) return false;
+    if (
+      options.selectedSourceConversationKeys &&
+      !options.selectedSourceConversationKeys.includes(sourceConversationKey(conversation.provider, conversation.providerConversationId))
+    ) {
+      return false;
+    }
     if (sinceTime !== undefined && Date.parse(conversation.startedAt) < sinceTime) return false;
     return true;
   });
@@ -224,8 +231,12 @@ function filterArchived(archived: ArchivedConversation[], options: PullT3Options
   return options.limit === undefined ? filtered : filtered.slice(0, options.limit);
 }
 
+export function sourceConversationKey(provider: string, providerConversationId: string): string {
+  return `${provider}:${providerConversationId}`;
+}
+
 function dedupeKey(archived: ArchivedConversation): string {
-  return `${archived.conversation.provider}:${archived.conversation.providerConversationId}`;
+  return sourceConversationKey(archived.conversation.provider, archived.conversation.providerConversationId);
 }
 
 function preferenceScore(archived: ArchivedConversation): number {
@@ -532,4 +543,37 @@ export function formatPullT3Result(result: PullT3Result, options: FormatPullT3Op
   }
 
   return lines;
+}
+
+function assertSelectionInRange(value: number, max: number): void {
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new Error(`Selection ${value} is outside the valid range 1-${max}.`);
+  }
+}
+
+export function parsePullT3Selection(input: string, max: number): number[] {
+  const trimmed = input.trim().toLowerCase();
+  if (trimmed === "") return [];
+  if (trimmed === "all") return Array.from({ length: max }, (_, index) => index);
+
+  const selected = new Set<number>();
+  for (const token of trimmed.split(",").map((part) => part.trim()).filter(Boolean)) {
+    const rangeMatch = /^(\d+)-(\d+)$/.exec(token);
+    if (rangeMatch) {
+      const start = Number.parseInt(rangeMatch[1], 10);
+      const end = Number.parseInt(rangeMatch[2], 10);
+      if (end < start) throw new Error(`Invalid descending range: ${token}.`);
+      assertSelectionInRange(start, max);
+      assertSelectionInRange(end, max);
+      for (let value = start; value <= end; value += 1) selected.add(value - 1);
+      continue;
+    }
+
+    if (!/^\d+$/.test(token)) throw new Error(`Invalid selection token: ${token}.`);
+    const value = Number.parseInt(token, 10);
+    assertSelectionInRange(value, max);
+    selected.add(value - 1);
+  }
+
+  return [...selected];
 }
