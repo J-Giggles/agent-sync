@@ -448,7 +448,8 @@ describe("provider adapters", () => {
         latest_turn_id text,
         created_at text not null,
         updated_at text not null,
-        deleted_at text
+        deleted_at text,
+        model_selection_json text
       );
       create table projection_thread_messages (
         message_id text primary key,
@@ -490,7 +491,8 @@ describe("provider adapters", () => {
         'turn-1',
         '2026-05-12T10:00:00.000Z',
         '2026-05-12T10:03:00.000Z',
-        null
+        null,
+        '{"instanceId":"claudeAgent","model":"claude-opus-4-7","options":[]}'
       );
       insert into projection_thread_messages values (
         'message-1',
@@ -549,5 +551,10 @@ describe("provider adapters", () => {
     expect(conversation.metadata.branch).toBe("staging");
     expect(conversation.metadata.t3ProviderName).toBe("claudeAgent");
     expect(conversation.metadata.t3ProviderInstanceId).toBe("claudeAgent");
+    expect(conversation.metadata.t3ModelSelection).toEqual({
+      instanceId: "claudeAgent",
+      model: "claude-opus-4-7",
+      options: [],
+    });
   });
 });

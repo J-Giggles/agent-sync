@@ -37,6 +37,7 @@ type T3MessageRow = {
   project_title?: string | null;
   provider_name?: string | null;
   provider_instance_id?: string | null;
+  model_selection_json?: string | null;
   message_id: string;
   turn_id?: string | null;
   role: string;
@@ -53,6 +54,17 @@ function normalizeTimestamp(value: string | null | undefined): string | undefine
   if (!value) return undefined;
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+}
+
+function parseJsonObject(value: string | null | undefined): Record<string, unknown> | undefined {
+  if (!value) return undefined;
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function lstatIfAccessible(path: string) {
@@ -157,6 +169,7 @@ async function readSqliteConversation(ref: RawConversationRef): Promise<Normaliz
         p.title as project_title,
         s.provider_name,
         s.provider_instance_id,
+        t.model_selection_json,
         m.message_id,
         m.turn_id,
         m.role,
@@ -197,6 +210,8 @@ async function readSqliteConversation(ref: RawConversationRef): Promise<Normaliz
   if (first.project_title) metadata.projectTitle = first.project_title;
   if (first.provider_name) metadata.t3ProviderName = first.provider_name;
   if (first.provider_instance_id) metadata.t3ProviderInstanceId = first.provider_instance_id;
+  const modelSelection = parseJsonObject(first.model_selection_json);
+  if (modelSelection) metadata.t3ModelSelection = modelSelection;
 
   return {
     schemaVersion: 1,

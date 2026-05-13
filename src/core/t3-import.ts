@@ -446,11 +446,35 @@ function metadataFor(archived: ArchivedConversation) {
   };
 }
 
-function modelSelectionJson(metadata: ReturnType<typeof metadataFor>): string {
-  return JSON.stringify({
+function fallbackModelSelection() {
+  return {
     instanceId: "codex",
     model: "gpt-5.5",
     options: [{ id: "reasoningEffort", value: "medium" }],
+  };
+}
+
+function importedModelSelection(archived: ArchivedConversation): Record<string, unknown> | undefined {
+  if (archived.conversation.provider !== "t3code") return undefined;
+
+  const raw = archived.conversation.metadata.t3ModelSelection;
+  if (!isRecord(raw)) return undefined;
+
+  const instanceId = stringValue(raw.instanceId);
+  const model = stringValue(raw.model);
+  if (!instanceId || !model) return undefined;
+
+  return {
+    ...raw,
+    instanceId,
+    model,
+    options: Array.isArray(raw.options) ? raw.options : [],
+  };
+}
+
+function modelSelectionJson(archived: ArchivedConversation, metadata: ReturnType<typeof metadataFor>): string {
+  return JSON.stringify({
+    ...(importedModelSelection(archived) ?? fallbackModelSelection()),
     agentSyncImport: metadata,
   });
 }
@@ -475,9 +499,7 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
       updated_at: updatedAt,
       deleted_at: null,
       default_model_selection_json: JSON.stringify({
-        instanceId: "codex",
-        model: "gpt-5.5",
-        options: [{ id: "reasoningEffort", value: "medium" }],
+        ...(importedModelSelection(archived) ?? fallbackModelSelection()),
         agentSyncImport: { archiveRoot: expandHomePath(config.centralArchiveDir) },
       }),
     },
@@ -493,7 +515,7 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
       deleted_at: null,
       runtime_mode: "full-access",
       interaction_mode: "default",
-      model_selection_json: modelSelectionJson(metadata),
+      model_selection_json: modelSelectionJson(archived, metadata),
       archived_at: null,
       latest_user_message_at: latestUserMessageAt(conversation.messages),
       pending_approval_count: 0,

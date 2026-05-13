@@ -331,6 +331,76 @@ describe("runPullT3", () => {
     expect(importedProjectRows[0].count).toBe(0);
   });
 
+  it("preserves T3 model selection metadata when importing T3 archive threads", async () => {
+    const root = await makeTempRoot("agent-sync-t3-preserve-model-selection");
+    const config = await fixtureConfig(root);
+    const databasePath = join(root, "t3.sqlite");
+    await createFixtureDatabase(databasePath);
+    const archiveDir = join(config.centralArchiveDir, "t3-preserve", "2026", "05", "13");
+    await mkdir(archiveDir, { recursive: true });
+    await writeFile(
+      join(archiveDir, "t3code-20260513T120000Z-stable-preserve.json"),
+      JSON.stringify({
+        schemaVersion: 1,
+        provider: "t3code",
+        providerConversationId: "t3-preserve-1",
+        stableId: "stable-preserve",
+        project: {
+          name: "t3-preserve",
+          root: "/work/t3-preserve",
+          matchedBy: "cwd",
+        },
+        startedAt: "2026-05-13T12:00:00.000Z",
+        updatedAt: "2026-05-13T12:05:00.000Z",
+        source: {
+          path: "/home/example/.t3/userdata/state.sqlite",
+          kind: "sqlite",
+        },
+        messages: [
+          {
+            id: "u1",
+            role: "user",
+            createdAt: "2026-05-13T12:00:00.000Z",
+            text: "Preserve my T3 model",
+          },
+        ],
+        metadata: {
+          cwd: "/work/t3-preserve",
+          t3ProviderName: "claudeAgent",
+          t3ProviderInstanceId: "claudeAgent",
+          t3ModelSelection: {
+            instanceId: "claudeAgent",
+            model: "claude-opus-4-7",
+            options: [{ id: "temperature", value: "0.2" }],
+          },
+        },
+      })
+    );
+
+    const result = await runPullT3(config, {
+      databasePath,
+      dryRun: false,
+      project: "t3-preserve",
+      provider: "t3code",
+    });
+    const threadRows = await sqliteRows<{ model_selection_json: string }>(
+      databasePath,
+      "select model_selection_json from projection_threads where title like '[agent-sync] t3code / t3-preserve / %'"
+    );
+    const modelSelection = JSON.parse(threadRows[0].model_selection_json) as {
+      instanceId?: string;
+      model?: string;
+      options?: unknown[];
+      agentSyncImport?: { sourceProvider?: string };
+    };
+
+    expect(result.imported).toBe(1);
+    expect(modelSelection.instanceId).toBe("claudeAgent");
+    expect(modelSelection.model).toBe("claude-opus-4-7");
+    expect(modelSelection.options).toEqual([{ id: "temperature", value: "0.2" }]);
+    expect(modelSelection.agentSyncImport?.sourceProvider).toBe("t3code");
+  });
+
   it("imports large conversations without exceeding command argument limits", async () => {
     const root = await makeTempRoot("agent-sync-t3-large-import");
     const config = await fixtureConfig(root);
