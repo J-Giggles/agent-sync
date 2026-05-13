@@ -446,6 +446,15 @@ function metadataFor(archived: ArchivedConversation) {
   };
 }
 
+function modelSelectionJson(metadata: ReturnType<typeof metadataFor>): string {
+  return JSON.stringify({
+    instanceId: "codex",
+    model: "gpt-5.5",
+    options: [{ id: "reasoningEffort", value: "medium" }],
+    agentSyncImport: metadata,
+  });
+}
+
 function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): T3ImportRecord {
   const conversation = archived.conversation;
   const metadata = metadataFor(archived);
@@ -465,7 +474,12 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
       created_at: createdAt,
       updated_at: updatedAt,
       deleted_at: null,
-      default_model_selection_json: JSON.stringify({ agentSyncImport: { archiveRoot: expandHomePath(config.centralArchiveDir) } }),
+      default_model_selection_json: JSON.stringify({
+        instanceId: "codex",
+        model: "gpt-5.5",
+        options: [{ id: "reasoningEffort", value: "medium" }],
+        agentSyncImport: { archiveRoot: expandHomePath(config.centralArchiveDir) },
+      }),
     },
     thread: {
       thread_id: threadId,
@@ -479,7 +493,7 @@ function buildImportRecord(config: SyncConfig, archived: ArchivedConversation): 
       deleted_at: null,
       runtime_mode: "full-access",
       interaction_mode: "default",
-      model_selection_json: JSON.stringify({ agentSyncImport: metadata }),
+      model_selection_json: modelSelectionJson(metadata),
       archived_at: null,
       latest_user_message_at: latestUserMessageAt(conversation.messages),
       pending_approval_count: 0,

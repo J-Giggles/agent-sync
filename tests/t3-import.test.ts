@@ -277,7 +277,16 @@ describe("runPullT3", () => {
     expect(messageRows).toHaveLength(5);
     expect(sessionRows).toHaveLength(3);
     expect(threadRows[0].thread_id).toMatch(/^agent-sync:/);
-    expect(JSON.parse(threadRows[0].model_selection_json).agentSyncImport.sourceProvider).toBe("claude-code");
+    const modelSelection = JSON.parse(threadRows[0].model_selection_json) as {
+      instanceId?: string;
+      model?: string;
+      options?: unknown[];
+      agentSyncImport?: { sourceProvider?: string };
+    };
+    expect(modelSelection.instanceId).toBe("codex");
+    expect(modelSelection.model).toBe("gpt-5.5");
+    expect(modelSelection.options).toEqual([{ id: "reasoningEffort", value: "medium" }]);
+    expect(modelSelection.agentSyncImport?.sourceProvider).toBe("claude-code");
     expect(JSON.parse(messageRows[0].attachments_json).agentSyncImport.sourceArchivePath).toContain("archive");
   });
 
