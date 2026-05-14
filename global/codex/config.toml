@@ -32,5 +32,5 @@ trust_level = "trusted"
 "gpt-5.5" = 2
 
 [mcp_servers.jira-local]
-command = "/home/jgigg/.local/bin/jira-local-mcp"
-args = []
+command = "/usr/bin/node"
+args = ["/home/jgigg/code/jira-mcp-server/dist/index.js"]
