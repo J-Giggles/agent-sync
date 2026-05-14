@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ENV_FILE="${JIRA_LOCAL_ENV_FILE:-$HOME/.config/agent-sync/jira-local.env}"
+
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+fi
+
+exec /usr/bin/node /home/jgigg/code/jira-mcp-server/dist/index.js

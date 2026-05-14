@@ -68,6 +68,12 @@ const BASE_AGENT_CONFIG_SPECS: AgentConfigSpec[] = [
     sourceRelativePath: "global/bin/agent-sync-push",
     linkRelativePath: ".local/bin/agent-sync-push",
   },
+  {
+    id: "jira-local-mcp",
+    label: "Jira local MCP wrapper",
+    sourceRelativePath: "global/bin/jira-local-mcp",
+    linkRelativePath: ".local/bin/jira-local-mcp",
+  },
 ];
 
 async function pathExists(path: string): Promise<boolean> {

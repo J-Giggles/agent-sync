@@ -19,6 +19,7 @@ async function writeSourceTree(sourceRoot: string): Promise<void> {
     "global/bin/codex-sync": "#!/usr/bin/env bash\n",
     "global/bin/agent-sync-pull": "#!/usr/bin/env bash\n",
     "global/bin/agent-sync-push": "#!/usr/bin/env bash\n",
+    "global/bin/jira-local-mcp": "#!/usr/bin/env bash\n",
     "global/claude/skills/custom-skill/SKILL.md": "---\nname: custom-skill\n---\n",
   };
 
@@ -51,6 +52,7 @@ describe("agent config installer", () => {
       ["codex-sync", "create", join(home, ".local", "bin", "codex-sync")],
       ["agent-sync-pull", "create", join(home, ".local", "bin", "agent-sync-pull")],
       ["agent-sync-push", "create", join(home, ".local", "bin", "agent-sync-push")],
+      ["jira-local-mcp", "create", join(home, ".local", "bin", "jira-local-mcp")],
       ["claude-skill:custom-skill", "create", join(home, ".claude", "skills", "custom-skill")],
     ]);
   });

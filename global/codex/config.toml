@@ -29,11 +29,5 @@ trust_level = "trusted"
 "gpt-5.5" = 2
 
 [mcp_servers.jira-local]
-command = "/usr/bin/node"
-args = ["/home/jgigg/code/jira-mcp-server/dist/index.js"]
-
-[mcp_servers.jira-local.env]
-JIRA_API_TOKEN = "REGENERATE_ME"
-JIRA_BASE_URL = "https://lifepass.atlassian.net/"
-JIRA_USER_EMAIL = "jordan@lifepass.eu"
-MCP_MODE = "write"
+command = "/home/jgigg/.local/bin/jira-local-mcp"
+args = []

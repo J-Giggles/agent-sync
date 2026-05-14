@@ -81,6 +81,7 @@ This creates:
 ~/.local/bin/codex-sync -> <agent-sync>/global/bin/codex-sync
 ~/.local/bin/agent-sync-pull -> <agent-sync>/global/bin/agent-sync-pull
 ~/.local/bin/agent-sync-push -> <agent-sync>/global/bin/agent-sync-push
+~/.local/bin/jira-local-mcp -> <agent-sync>/global/bin/jira-local-mcp
 ```
 
 Existing files or wrong symlinks are moved aside to `<path>.bak` before the new symlink is created. Re-running the command is idempotent. Preview changes first with:
@@ -105,7 +106,16 @@ It also installs global Superpowers skills if missing, sparse-clones Anthropic's
 
 agent-sync now replaces the agent-related dotfiles repo. After `agent-sync install` reports every item as `unchanged`, no normal agent startup path should need `~/dotfiles`.
 
-`global/codex/config.toml` preserves the configured MCP/server structure but uses `REGENERATE_ME` for the Jira API token. Replace that value locally after bootstrap or regenerate the token and commit only if you intentionally want the repo to carry it.
+`global/codex/config.toml` launches the local Jira MCP through `~/.local/bin/jira-local-mcp`. The wrapper sources machine-local credentials from `~/.config/agent-sync/jira-local.env`, which should look like:
+
+```bash
+JIRA_BASE_URL=https://lifepass.atlassian.net/
+JIRA_USER_EMAIL=jordan@lifepass.eu
+JIRA_API_TOKEN=<regenerated-token>
+MCP_MODE=write
+```
+
+An example lives at `global/config/jira-local.env.example`. Keep the real env file out of Git.
 
 Provider `paths` are optional. When configured, they limit discovery and diagnostics to those locations:
 
