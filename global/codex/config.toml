@@ -25,6 +25,9 @@ trust_level = "trusted"
 [projects."/home/jgigg/.config"]
 trust_level = "trusted"
 
+[projects."/home/jgigg/code/jira-mcp-server"]
+trust_level = "trusted"
+
 [tui.model_availability_nux]
 "gpt-5.5" = 2
 
