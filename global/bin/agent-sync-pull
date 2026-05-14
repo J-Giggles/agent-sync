@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_SYNC="${AGENT_SYNC_DIR:-$HOME/code/agent-sync}"
+
+if [ ! -d "$AGENT_SYNC/.git" ]; then
+  echo "agent-sync-pull: $AGENT_SYNC is not a git repo" >&2
+  exit 0
+fi
+
+cd "$AGENT_SYNC"
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+if [ -z "$upstream" ]; then
+  echo "agent-sync-pull: no upstream configured for $(git branch --show-current)" >&2
+  exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  echo "agent-sync-pull: local changes present; skipping pull" >&2
+  exit 0
+fi
+
+git fetch --quiet
+
+local_rev="$(git rev-parse HEAD)"
+remote_rev="$(git rev-parse "$upstream")"
+base_rev="$(git merge-base HEAD "$upstream")"
+
+if [ "$local_rev" = "$remote_rev" ]; then
+  exit 0
+fi
+
+if [ "$local_rev" = "$base_rev" ]; then
+  git pull --ff-only --quiet
+  echo "agent-sync-pull: fast-forwarded to $(git rev-parse --short HEAD)"
+  exit 0
+fi
+
+echo "agent-sync-pull: local branch has diverged from $upstream; resolve manually" >&2

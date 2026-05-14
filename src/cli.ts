@@ -5,6 +5,7 @@ import { extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cancel, isCancel, multiselect, outro } from "@clack/prompts";
 import { Command } from "commander";
+import { installAgentConfig, type AgentConfigInstallPlanItem } from "./core/agent-config.js";
 import { runDoctor } from "./core/doctor.js";
 import { installGlobalRules, type GlobalRuleInstallPlanItem } from "./core/global-rules.js";
 import { expandHomePath } from "./core/path-utils.js";
@@ -67,6 +68,8 @@ type RulesInstallCliOptions = {
   sourceRoot?: string;
 };
 
+type InstallCliOptions = RulesInstallCliOptions;
+
 function printDiagnostic(diagnostic: SyncDiagnostic): void {
   const source = diagnostic.sourcePath ? ` ${diagnostic.sourcePath}` : "";
   const provider = diagnostic.provider ? ` ${diagnostic.provider}` : "";
@@ -80,6 +83,18 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
 }
 
 function formatGlobalRuleInstall(item: GlobalRuleInstallPlanItem): string {
+  if (item.action === "unchanged") {
+    return `unchanged: ${item.label} ${item.linkPath} -> ${item.sourcePath}`;
+  }
+
+  if (item.action === "replace") {
+    return `replace: ${item.label} ${item.linkPath} -> ${item.sourcePath} (backup: ${item.backupPath})`;
+  }
+
+  return `create: ${item.label} ${item.linkPath} -> ${item.sourcePath}`;
+}
+
+function formatAgentConfigInstall(item: AgentConfigInstallPlanItem): string {
   if (item.action === "unchanged") {
     return `unchanged: ${item.label} ${item.linkPath} -> ${item.sourcePath}`;
   }
@@ -333,6 +348,24 @@ program.command("status").description("Show sync status").action(async () => {
   const config = await loadConfig();
   await printStatus(config);
 });
+
+program
+  .command("install")
+  .description("Install all global agent config from agent-sync")
+  .option("--dry-run", "Show planned symlink changes without writing")
+  .option("--home <path>", "Home directory to install into", "~")
+  .option("--source-root <path>", "agent-sync checkout containing global config sources")
+  .action(async (options: InstallCliOptions) => {
+    const result = await installAgentConfig({
+      dryRun: options.dryRun,
+      homeDir: expandHomePath(options.home ?? "~"),
+      sourceRoot: options.sourceRoot ? expandHomePath(options.sourceRoot) : undefined,
+    });
+
+    for (const item of result) {
+      console.log(`${options.dryRun ? "dry-run: " : ""}${formatAgentConfigInstall(item)}`);
+    }
+  });
 
 program
   .command("rules:install")

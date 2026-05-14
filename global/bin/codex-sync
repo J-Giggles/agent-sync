@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_SYNC="${AGENT_SYNC_DIR:-$HOME/code/agent-sync}"
+
+if [ -x "$AGENT_SYNC/global/bin/agent-sync-pull" ]; then
+  "$AGENT_SYNC/global/bin/agent-sync-pull" || true
+fi
+
+set +e
+codex "$@"
+status=$?
+set -e
+
+if [ -x "$AGENT_SYNC/global/bin/agent-sync-push" ]; then
+  "$AGENT_SYNC/global/bin/agent-sync-push" || true
+fi
+
+exit "$status"

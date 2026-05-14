@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_SYNC="${AGENT_SYNC_DIR:-$HOME/code/agent-sync}"
+MESSAGE="${AGENT_SYNC_COMMIT_MESSAGE:-sync: agent config auto-update}"
+
+if [ ! -d "$AGENT_SYNC/.git" ]; then
+  echo "agent-sync-push: $AGENT_SYNC is not a git repo" >&2
+  exit 0
+fi
+
+cd "$AGENT_SYNC"
+
+upstream="$(git rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+if [ -z "$upstream" ]; then
+  echo "agent-sync-push: no upstream configured for $(git branch --show-current)" >&2
+  exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+  git add -A
+  if ! git diff --cached --quiet; then
+    git commit -m "$MESSAGE"
+    echo "agent-sync-push: committed $(git rev-parse --short HEAD)"
+  fi
+fi
+
+git fetch --quiet
+
+if ! git rebase "$upstream"; then
+  echo "agent-sync-push: rebase failed; resolve manually in $AGENT_SYNC" >&2
+  exit 0
+fi
+
+if [ "$(git rev-parse HEAD)" != "$(git rev-parse "$upstream")" ]; then
+  git push --quiet
+  echo "agent-sync-push: pushed $(git rev-parse --short HEAD)"
+fi

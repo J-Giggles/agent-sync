@@ -1,0 +1,43 @@
+{
+  "includeCoAuthoredBy": false,
+  "model": "opus[1m]",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.local/bin/agent-sync-pull"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.local/bin/claude-announce-project",
+            "async": true
+          },
+          {
+            "type": "command",
+            "command": "~/.local/bin/agent-sync-push",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "vercel-plugin@vercel-vercel-plugin": true,
+    "superpowers@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true,
+    "context7@claude-plugins-official": true,
+    "code-review@claude-plugins-official": true,
+    "code-simplifier@claude-plugins-official": true,
+    "playwright@claude-plugins-official": true,
+    "stagehand@claude-plugins-official": false
+  },
+  "autoUpdatesChannel": "latest"
+}

@@ -1,0 +1,39 @@
+model = "gpt-5.5"
+model_reasoning_effort = "high"
+
+[projects."/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/liftpass-online"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/agent-sync"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/giggabit-invoice"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/.config"]
+trust_level = "trusted"
+
+[tui.model_availability_nux]
+"gpt-5.5" = 2
+
+[mcp_servers.jira-local]
+command = "/usr/bin/node"
+args = ["/home/jgigg/code/jira-mcp-server/dist/index.js"]
+
+[mcp_servers.jira-local.env]
+JIRA_API_TOKEN = "REGENERATE_ME"
+JIRA_BASE_URL = "https://lifepass.atlassian.net/"
+JIRA_USER_EMAIL = "jordan@lifepass.eu"
+MCP_MODE = "write"

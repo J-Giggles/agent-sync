@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DRY_RUN=0
+
+for arg in "$@"; do
+  if [ "$arg" = "--dry-run" ]; then
+    DRY_RUN=1
+  fi
+done
+
+if [ ! -f "$ROOT/dist/src/cli.js" ]; then
+  (cd "$ROOT" && npm install && npm run build)
+fi
+
+node "$ROOT/dist/src/cli.js" install --source-root "$ROOT" "$@"
+
+if [ "$DRY_RUN" = "1" ]; then
+  echo "dry-run: would ensure obra/superpowers, skill-creator, and Omarchy skill link"
+  exit 0
+fi
+
+if [ -d "$HOME/.agents/skills/using-superpowers" ]; then
+  echo "✓ obra/superpowers already installed (run 'npx skills update -g' to refresh)"
+else
+  echo "Installing obra/superpowers..."
+  npx --yes skills add obra/superpowers -g --all
+  echo "✓ obra/superpowers installed"
+fi
+
+if [ -d "$HOME/.claude/skills/skill-creator" ]; then
+  echo "✓ skill-creator already present"
+else
+  echo "Installing Anthropic's skill-creator..."
+  tmpdir="$(mktemp -d)"
+  git clone --depth 1 --filter=blob:none --sparse https://github.com/anthropics/skills.git "$tmpdir"
+  ( cd "$tmpdir" && git sparse-checkout set skills/skill-creator )
+  cp -r "$tmpdir/skills/skill-creator" "$HOME/.claude/skills/skill-creator"
+  rm -rf "$tmpdir"
+  echo "✓ skill-creator installed"
+fi
+
+if [ -d "$HOME/.local/share/omarchy/default/omarchy-skill" ]; then
+  if [ -L "$HOME/.claude/skills/omarchy" ] && [ "$(readlink "$HOME/.claude/skills/omarchy")" = "$HOME/.local/share/omarchy/default/omarchy-skill" ]; then
+    echo "✓ omarchy skill already symlinked"
+  elif [ -e "$HOME/.claude/skills/omarchy" ] || [ -L "$HOME/.claude/skills/omarchy" ]; then
+    echo "! ~/.claude/skills/omarchy exists; leaving it unchanged"
+  else
+    mkdir -p "$HOME/.claude/skills"
+    ln -s "$HOME/.local/share/omarchy/default/omarchy-skill" "$HOME/.claude/skills/omarchy"
+    echo "✓ omarchy skill symlinked"
+  fi
+fi

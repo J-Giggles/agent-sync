@@ -8,13 +8,13 @@
 Make agent-sync the complete source of truth and installer for the remaining agent config previously owned by dotfiles, so the dotfiles repo can be deleted.
 
 ## Plan
-- [ ] Inventory remaining dotfiles-owned files and classify each as migrate, replace, or machine-local.
-- [ ] Move Claude settings, Codex config shape, helper scripts, and custom skills into agent-sync-owned tracked paths.
-- [ ] Add an idempotent install command that populates all live paths from agent-sync, not only rule files.
-- [ ] Replace dotfiles-specific sync wrappers with agent-sync equivalents.
-- [ ] Update docs with the full bootstrap flow and dotfiles deletion checklist.
-- [ ] Add tests for full config install planning, backup behavior, and idempotency.
-- [ ] Run typecheck, tests, build, and the installer dry run.
+- [x] Inventory remaining dotfiles-owned files and classify each as migrate, replace, or machine-local.
+- [x] Move Claude settings, Codex config shape, helper scripts, and custom skills into agent-sync-owned tracked paths.
+- [x] Add an idempotent install command that populates all live paths from agent-sync, not only rule files.
+- [x] Replace dotfiles-specific sync wrappers with agent-sync equivalents.
+- [x] Update docs with the full bootstrap flow and dotfiles deletion checklist.
+- [x] Add tests for full config install planning, backup behavior, and idempotency.
+- [x] Run typecheck, tests, build, and the installer dry run.
 
 ## Acceptance criteria
 - agent-sync can install `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md`, `~/.claude/settings.json`, `~/.codex/config.toml`, custom Claude skills, and local helper scripts.
@@ -26,4 +26,4 @@ Make agent-sync the complete source of truth and installer for the remaining age
 - `npm run typecheck`, `npm test`, and `npm run build` pass.
 
 ## Notes
-The user explicitly wants to delete dotfiles and is willing to regenerate secrets. Do not commit active credentials; migrate config structure with placeholder values where needed.
+The user explicitly wants to delete dotfiles and is willing to regenerate secrets. Do not commit active credentials; migrate config structure with placeholder values where needed. `global/codex/config.toml` uses `REGENERATE_ME` for the Jira API token. Live symlinks for rules, settings, scripts, and custom skills now point at agent-sync.

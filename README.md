@@ -21,8 +21,8 @@ node dist/src/cli.js doctor
 node dist/src/cli.js status
 node dist/src/cli.js sync
 node dist/src/cli.js watch
-node dist/src/cli.js rules:install --dry-run
-node dist/src/cli.js rules:install
+node dist/src/cli.js install --dry-run
+node dist/src/cli.js install
 node dist/src/cli.js pull:t3 --dry-run
 ```
 
@@ -51,56 +51,61 @@ Create `agent-sync.config.json` in the directory where you run the CLI. If the f
 }
 ```
 
-## Global Agent Rules
+## Global Agent Config
 
-agent-sync owns the tracked source files for global Codex and Claude Code rules:
+agent-sync owns the tracked source files for global Codex and Claude Code rules, settings, helper scripts, and custom Claude skills:
 
 ```text
 global/codex/AGENTS.md
+global/codex/config.toml
 global/claude/CLAUDE.md
+global/claude/settings.json
+global/claude/skills/
+global/bin/
 ```
 
-Install or refresh the live global rule symlinks with:
+Install or refresh all live global config symlinks with:
 
 ```bash
-node dist/src/cli.js rules:install
+node dist/src/cli.js install
 ```
 
 This creates:
 
 ```text
 ~/.codex/AGENTS.md -> <agent-sync>/global/codex/AGENTS.md
+~/.codex/config.toml -> <agent-sync>/global/codex/config.toml
 ~/.claude/CLAUDE.md -> <agent-sync>/global/claude/CLAUDE.md
+~/.claude/settings.json -> <agent-sync>/global/claude/settings.json
+~/.claude/skills/<custom-skill> -> <agent-sync>/global/claude/skills/<custom-skill>
+~/.local/bin/codex-sync -> <agent-sync>/global/bin/codex-sync
+~/.local/bin/agent-sync-pull -> <agent-sync>/global/bin/agent-sync-pull
+~/.local/bin/agent-sync-push -> <agent-sync>/global/bin/agent-sync-push
 ```
 
 Existing files or wrong symlinks are moved aside to `<path>.bak` before the new symlink is created. Re-running the command is idempotent. Preview changes first with:
 
 ```bash
-node dist/src/cli.js rules:install --dry-run
+node dist/src/cli.js install --dry-run
 ```
 
 For a new machine, clone agent-sync and run the helper from the checkout:
 
 ```bash
 git clone https://github.com/J-Giggles/agent-sync.git ~/code/agent-sync
-~/code/agent-sync/bin/agent-sync-rules-install
+~/code/agent-sync/bin/agent-sync-bootstrap
 ```
 
-The helper installs dependencies and builds the CLI if `dist/` is not present, then runs `rules:install`.
+The helper installs dependencies and builds the CLI if `dist/` is not present, then runs `install`.
+It also installs global Superpowers skills if missing, sparse-clones Anthropic's `skill-creator` if missing, and links the Omarchy skill when the local Omarchy system install exists.
 
-### Dotfiles Delegation
+`rules:install` remains available when you intentionally want to refresh only `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`.
 
-dotfiles should stop symlinking `~/dotfiles/codex/AGENTS.md` and `~/dotfiles/claude/CLAUDE.md` directly. During transition, replace those bootstrap lines with a delegation call:
+### Replacing Dotfiles
 
-```bash
-if [ -x "$HOME/code/agent-sync/bin/agent-sync-rules-install" ]; then
-  "$HOME/code/agent-sync/bin/agent-sync-rules-install"
-else
-  echo "! agent-sync is not installed; clone it and run bin/agent-sync-rules-install to install global agent rules"
-fi
-```
+agent-sync now replaces the agent-related dotfiles repo. After `agent-sync install` reports every item as `unchanged`, no normal agent startup path should need `~/dotfiles`.
 
-After this migration, dotfiles is still only needed for files it continues to own, such as stable non-secret agent settings or personal shell helpers. It can be deleted once those remaining files are either moved into agent-sync, moved to another repo, or intentionally made machine-local. Do not move secrets such as local auth tokens or API tokens into agent-sync.
+`global/codex/config.toml` preserves the configured MCP/server structure but uses `REGENERATE_ME` for the Jira API token. Replace that value locally after bootstrap or regenerate the token and commit only if you intentionally want the repo to carry it.
 
 Provider `paths` are optional. When configured, they limit discovery and diagnostics to those locations:
 
@@ -133,7 +138,10 @@ node dist/src/cli.js sync
 # Watch enabled provider paths and sync changed providers after a short debounce.
 node dist/src/cli.js watch
 
-# Install global Codex and Claude rule symlinks.
+# Install global Codex and Claude config symlinks.
+node dist/src/cli.js install
+
+# Install only global Codex and Claude rule symlinks.
 node dist/src/cli.js rules:install
 
 # Interactively choose a project and chats to preview for T3.
