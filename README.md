@@ -1,6 +1,6 @@
 # agent-sync
 
-`agent-sync` is a local-only CLI for archiving agent chat histories from Cursor, Codex, Claude Code, and T3 Code. It reads provider files from disk, normalizes conversations, and writes JSON plus Markdown copies into a central archive and each matched project's `.agents/chats` folder.
+`agent-sync` is a local-only CLI for archiving agent chat histories from Cursor, Codex, Claude Code, and T3 Code, and for installing global agent rule files. It reads provider files from disk, normalizes conversations, and writes JSON plus Markdown copies into a central archive and each matched project's `.agents/chats` folder.
 
 > [!IMPORTANT]
 > Chat histories can contain private code, prompts, credentials, customer data, and other sensitive context. Keep archives, unknown-project output, sync manifests, provider data, and project-local `.agents/chats` folders out of public repositories.
@@ -21,6 +21,8 @@ node dist/src/cli.js doctor
 node dist/src/cli.js status
 node dist/src/cli.js sync
 node dist/src/cli.js watch
+node dist/src/cli.js rules:install --dry-run
+node dist/src/cli.js rules:install
 node dist/src/cli.js pull:t3 --dry-run
 ```
 
@@ -48,6 +50,57 @@ Create `agent-sync.config.json` in the directory where you run the CLI. If the f
   }
 }
 ```
+
+## Global Agent Rules
+
+agent-sync owns the tracked source files for global Codex and Claude Code rules:
+
+```text
+global/codex/AGENTS.md
+global/claude/CLAUDE.md
+```
+
+Install or refresh the live global rule symlinks with:
+
+```bash
+node dist/src/cli.js rules:install
+```
+
+This creates:
+
+```text
+~/.codex/AGENTS.md -> <agent-sync>/global/codex/AGENTS.md
+~/.claude/CLAUDE.md -> <agent-sync>/global/claude/CLAUDE.md
+```
+
+Existing files or wrong symlinks are moved aside to `<path>.bak` before the new symlink is created. Re-running the command is idempotent. Preview changes first with:
+
+```bash
+node dist/src/cli.js rules:install --dry-run
+```
+
+For a new machine, clone agent-sync and run the helper from the checkout:
+
+```bash
+git clone https://github.com/J-Giggles/agent-sync.git ~/code/agent-sync
+~/code/agent-sync/bin/agent-sync-rules-install
+```
+
+The helper installs dependencies and builds the CLI if `dist/` is not present, then runs `rules:install`.
+
+### Dotfiles Delegation
+
+dotfiles should stop symlinking `~/dotfiles/codex/AGENTS.md` and `~/dotfiles/claude/CLAUDE.md` directly. During transition, replace those bootstrap lines with a delegation call:
+
+```bash
+if [ -x "$HOME/code/agent-sync/bin/agent-sync-rules-install" ]; then
+  "$HOME/code/agent-sync/bin/agent-sync-rules-install"
+else
+  echo "! agent-sync is not installed; clone it and run bin/agent-sync-rules-install to install global agent rules"
+fi
+```
+
+After this migration, dotfiles is still only needed for files it continues to own, such as stable non-secret agent settings or personal shell helpers. It can be deleted once those remaining files are either moved into agent-sync, moved to another repo, or intentionally made machine-local. Do not move secrets such as local auth tokens or API tokens into agent-sync.
 
 Provider `paths` are optional. When configured, they limit discovery and diagnostics to those locations:
 
@@ -79,6 +132,9 @@ node dist/src/cli.js sync
 
 # Watch enabled provider paths and sync changed providers after a short debounce.
 node dist/src/cli.js watch
+
+# Install global Codex and Claude rule symlinks.
+node dist/src/cli.js rules:install
 
 # Interactively choose a project and chats to preview for T3.
 node dist/src/cli.js pull:t3 --dry-run

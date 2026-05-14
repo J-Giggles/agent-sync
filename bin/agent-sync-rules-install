@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if [ ! -f "$ROOT/dist/src/cli.js" ]; then
+  (cd "$ROOT" && npm install && npm run build)
+fi
+
+node "$ROOT/dist/src/cli.js" rules:install --source-root "$ROOT" "$@"

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { cancel, isCancel, multiselect, outro } from "@clack/prompts";
 import { Command } from "commander";
 import { runDoctor } from "./core/doctor.js";
+import { installGlobalRules, type GlobalRuleInstallPlanItem } from "./core/global-rules.js";
 import { expandHomePath } from "./core/path-utils.js";
 import { discoverProjects } from "./core/projects.js";
 import { runSync } from "./core/sync.js";
@@ -60,6 +61,12 @@ type PullT3CliOptions = {
   includeSubagents?: boolean;
 };
 
+type RulesInstallCliOptions = {
+  dryRun?: boolean;
+  home?: string;
+  sourceRoot?: string;
+};
+
 function printDiagnostic(diagnostic: SyncDiagnostic): void {
   const source = diagnostic.sourcePath ? ` ${diagnostic.sourcePath}` : "";
   const provider = diagnostic.provider ? ` ${diagnostic.provider}` : "";
@@ -70,6 +77,18 @@ function printDiagnostic(diagnostic: SyncDiagnostic): void {
   } else {
     console.error(output);
   }
+}
+
+function formatGlobalRuleInstall(item: GlobalRuleInstallPlanItem): string {
+  if (item.action === "unchanged") {
+    return `unchanged: ${item.label} ${item.linkPath} -> ${item.sourcePath}`;
+  }
+
+  if (item.action === "replace") {
+    return `replace: ${item.label} ${item.linkPath} -> ${item.sourcePath} (backup: ${item.backupPath})`;
+  }
+
+  return `create: ${item.label} ${item.linkPath} -> ${item.sourcePath}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -314,6 +333,24 @@ program.command("status").description("Show sync status").action(async () => {
   const config = await loadConfig();
   await printStatus(config);
 });
+
+program
+  .command("rules:install")
+  .description("Install global Codex and Claude rule files from agent-sync")
+  .option("--dry-run", "Show planned symlink changes without writing")
+  .option("--home <path>", "Home directory to install into", "~")
+  .option("--source-root <path>", "agent-sync checkout containing global rule sources")
+  .action(async (options: RulesInstallCliOptions) => {
+    const result = await installGlobalRules({
+      dryRun: options.dryRun,
+      homeDir: expandHomePath(options.home ?? "~"),
+      sourceRoot: options.sourceRoot ? expandHomePath(options.sourceRoot) : undefined,
+    });
+
+    for (const item of result) {
+      console.log(`${options.dryRun ? "dry-run: " : ""}${formatGlobalRuleInstall(item)}`);
+    }
+  });
 
 program
   .command("pull:t3")
