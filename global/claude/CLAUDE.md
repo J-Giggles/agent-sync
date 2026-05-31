@@ -32,6 +32,19 @@ Before responding, build a picture of state with these checks. Don't narrate the
 
 From this, answer three questions: which branch is active, whether the request belongs on `staging` or needs isolation, and whether an existing plan file constrains the work.
 
+## Project memory protocol
+
+Use project-local memory as the durable source of truth. Before substantial investigation or implementation, read `AGENTS.md` plus `.context/index.md` and `.context/docs.md` when they exist. Also honor nearby harness adapters such as `.cursor/rules/*.mdc`, `CLAUDE.md`, `GEMINI.md`, or nested `AGENTS.md`.
+
+During work, collect candidate learnings but do not immediately persist them. At the end of substantial work, propose a short **Memory Candidates** block with:
+
+- Learned fact or rule
+- Evidence/source
+- Confidence
+- Suggested destination
+
+Use `.context/docs.md` for durable project facts, workflows, architecture notes, commands, ports, and gotchas. Use `.context/index.md` only for high-level orientation. Use harness rule files only for instructions future agents must actively follow. Never save secrets, private env values, customer data, speculation, or one-off debugging noise as durable project memory.
+
 ## Starting work
 
 Before any code is written, walk this exact sequence:
