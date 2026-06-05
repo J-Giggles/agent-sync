@@ -1,5 +1,7 @@
 model = "gpt-5.5"
 model_reasoning_effort = "high"
+approvals_reviewer = "user"
+service_tier = "fast"
 
 [projects."/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo"]
 trust_level = "trusted"
