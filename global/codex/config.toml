@@ -45,6 +45,9 @@ trust_level = "trusted"
 [projects."/home/jgigg/home/jgigg/code/t3code-local/t3code-wt-tailscale-test"]
 trust_level = "trusted"
 
+[projects."/home/jgigg/code/t3code-local/t3code"]
+trust_level = "trusted"
+
 [tui.model_availability_nux]
 "gpt-5.5" = 4
 
