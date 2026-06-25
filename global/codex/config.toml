@@ -1,7 +1,7 @@
 model = "gpt-5.5"
-model_reasoning_effort = "high"
+model_reasoning_effort = "xhigh"
 approvals_reviewer = "user"
-service_tier = "default"
+service_tier = "fast"
 
 [projects."/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo"]
 trust_level = "trusted"
@@ -49,6 +49,12 @@ trust_level = "trusted"
 trust_level = "trusted"
 
 [projects."/home/jgigg"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/giggabit-groupbook"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/Desktop"]
 trust_level = "trusted"
 
 [tui.model_availability_nux]
