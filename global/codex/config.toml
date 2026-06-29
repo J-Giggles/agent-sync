@@ -1,7 +1,7 @@
 model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 approvals_reviewer = "user"
-service_tier = "fast"
+service_tier = "default"
 
 [projects."/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo"]
 trust_level = "trusted"
@@ -60,9 +60,15 @@ trust_level = "trusted"
 [projects."/home/jgigg/Downloads"]
 trust_level = "trusted"
 
+[tui]
+pet = "fireball"
+
 [tui.model_availability_nux]
 "gpt-5.5" = 4
 
 [mcp_servers.jira-local]
 command = "/usr/bin/node"
 args = ["/home/jgigg/code/jira-mcp-server/dist/index.js"]
+
+[notice]
+hide_full_access_warning = true
