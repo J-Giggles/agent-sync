@@ -1,7 +1,7 @@
 model = "gpt-5.5"
 model_reasoning_effort = "xhigh"
 approvals_reviewer = "user"
-service_tier = "default"
+service_tier = "priority"
 
 [projects."/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo"]
 trust_level = "trusted"
@@ -60,6 +60,87 @@ trust_level = "trusted"
 [projects."/home/jgigg/Downloads"]
 trust_level = "trusted"
 
+[projects."/home/jgigg/code/t3code-nightly-smoke-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-rerere-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-clean-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final2-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final4-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final5-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final6-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final7-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-final8-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-squashed-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-squashed-v2-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-squashed-v3-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/t3code-nightly-smoke-squashed-v6-GBT-37"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/giggabit-agent-mail-service"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony-workspaces/GBT-148"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony-workspaces/GBT-174"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony-workspaces/GBT-245"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony-workspaces/GBT-260"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/symphony-workspaces/GBT-268"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-3836848-0-mrkh6xc2-pbXvHz/workspace-d6dCFu"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-456734-0-mrkhhbum-YKU79m/workspace-go7PQ2"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-1514091-0-mrkhur8z-EHxI4A/workspace-iQVxLP"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-614441-0-mrkly3tg-rImYNW/workspace-QuPeQM"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-212931-0-mrkmmso2-0wxNeB/workspace-EHXrp1"]
+trust_level = "trusted"
+
+[projects."/home/jgigg/code/huly-selfhost"]
+trust_level = "trusted"
+
+[projects."/tmp/t3code-desktop-e2e-2319240-0-mroclddr-jwaD96/workspace-s0Rp5j"]
+trust_level = "trusted"
+
 [tui]
 pet = "fireball"
 
@@ -68,3 +149,13 @@ pet = "fireball"
 
 [notice]
 hide_full_access_warning = true
+
+[mcp_servers.playwright-extension]
+command = "npx"
+args = ["-y", "@playwright/mcp@0.0.78", "--extension", "--viewport-size", "1440x900", "--codegen", "none", "--console-level", "warning", "--image-responses", "omit", "--output-mode", "file", "--output-dir", "/home/jgigg/.local/share/t3code-agent-browser/mcp-output", "--timeout-action", "10000", "--timeout-navigation", "60000"]
+
+[mcp_servers.playwright-extension.env]
+PLAYWRIGHT_MCP_EXTENSION_TOKEN = "w_P2HtSO2rm19P2kjQN_dFBTb7asWAxXi3mcHEr82A0"
+
+[plugins."giggabit-agent-mail-service@personal"]
+enabled = true
