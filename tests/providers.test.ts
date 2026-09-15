@@ -380,8 +380,13 @@ describe("provider adapters", () => {
   });
 
   it("cursor provider discovers project agent transcripts and infers the project root", async () => {
+    const home = homedir();
+    const homeEncoded = home.slice(1).replaceAll("/", "-");
+    const projectName = "mountain-technologies-lifepass-neon-monorepo";
+    const encodedProjectName = `${homeEncoded}-code-${projectName}`;
+    
     const root = join(tmpdir(), `agent-sync-cursor-projects-${crypto.randomUUID()}`);
-    const projectDir = join(root, "home-jgigg-code-mountain-technologies-lifepass-neon-monorepo");
+    const projectDir = join(root, encodedProjectName);
     const transcriptDir = join(projectDir, "agent-transcripts", "f4bed908-ce56-4cc7-b0e5-f4e592c70fee");
     const transcriptPath = join(transcriptDir, "f4bed908-ce56-4cc7-b0e5-f4e592c70fee.jsonl");
     await mkdir(transcriptDir, { recursive: true });
@@ -409,7 +414,7 @@ describe("provider adapters", () => {
       "cursor transcript hello",
       "cursor transcript response",
     ]);
-    expect(conversation.metadata.cwd).toBe("/home/jgigg/code/mountain-technologies-lifepass-neon-monorepo");
+    expect(conversation.metadata.cwd).toBe(`${home}/code/${projectName}`);
   });
 
   it("t3code provider reads JSON conversations", async () => {
