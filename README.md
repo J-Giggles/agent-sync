@@ -32,6 +32,10 @@ During development, you can also use:
 npm run dev -- doctor
 ```
 
+## CI
+
+GitHub Actions runs `npm run typecheck` and `npm test` on pull requests and pushes to the `staging` branch. The workflow configuration lives at `.github/workflows/ci.yml`.
+
 ## Configuration
 
 Create `agent-sync.config.json` in the directory where you run the CLI. If the file is missing, `agent-sync` uses the built-in defaults shown below.
