@@ -17,16 +17,8 @@ fi
 node "$ROOT/dist/src/cli.js" install --source-root "$ROOT" "$@"
 
 if [ "$DRY_RUN" = "1" ]; then
-  echo "dry-run: would ensure obra/superpowers, skill-creator, and Omarchy skill link"
+  echo "dry-run: would ensure skill-creator and Omarchy skill link"
   exit 0
-fi
-
-if [ -d "$HOME/.agents/skills/using-superpowers" ]; then
-  echo "✓ obra/superpowers already installed (run 'npx skills update -g' to refresh)"
-else
-  echo "Installing obra/superpowers..."
-  npx --yes skills add obra/superpowers -g --all
-  echo "✓ obra/superpowers installed"
 fi
 
 if [ -d "$HOME/.claude/skills/skill-creator" ]; then

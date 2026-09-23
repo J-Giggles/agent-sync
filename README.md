@@ -102,7 +102,7 @@ git clone https://github.com/J-Giggles/agent-sync.git ~/code/agent-sync
 ```
 
 The helper installs dependencies and builds the CLI if `dist/` is not present, then runs `install`.
-It also installs global Superpowers skills if missing, sparse-clones Anthropic's `skill-creator` if missing, and links the Omarchy skill when the local Omarchy system install exists.
+It also sparse-clones Anthropic's `skill-creator` if missing, and links the Omarchy skill when the local Omarchy system install exists.
 
 `rules:install` remains available when you intentionally want to refresh only `~/.codex/AGENTS.md` and `~/.claude/CLAUDE.md`.
 
