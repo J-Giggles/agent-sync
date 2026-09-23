@@ -18,7 +18,6 @@ Do not create a branch or worktree automatically just because the user asks for 
 
 Worktrees are still the preferred tool for parallel feature work, but they are opt-in for the task at hand rather than mandatory for every change. When they are used, keep them short-lived and merge finished slices back to `staging` quickly.
 
-This also composes cleanly with [obra/superpowers](https://github.com/obra/superpowers), which must be installed globally (see "Starting work" step 1 below). Superpowers brings the execution methodology (brainstorming, TDD, subagent-driven development, code review), this rule brings the lifecycle discipline (staging-first protection, plan files for larger work, completion commits, ship through staging). They are complementary — defer to Superpowers' skills for *how* to build; this rule governs *what* to build, when to stop, and how to ship.
 
 ## Orientation (run silently at the start of any turn that involves code)
 
@@ -49,15 +48,7 @@ Use `.context/docs.md` for durable project facts, workflows, architecture notes,
 
 Before any code is written, walk this exact sequence:
 
-1. **Verify Superpowers is installed globally.** Check `test -d ~/.agents/skills/using-superpowers`. If missing, install it once for the whole machine — no per-worktree install needed:
-
-   ```bash
-   npx --yes skills add obra/superpowers -g --all
-   ```
-
-   This brings in Jesse Vincent's methodology skills (brainstorming, writing-plans, subagent-driven-development, TDD, code review, finishing-a-development-branch, using-git-worktrees) and symlinks them into every supported agent's skill directory. They trigger automatically as needed across every project and every worktree. If the check passes, skip this step.
-
-2. **Enforce the branch policy.**
+1. **Enforce the branch policy.**
 
    - If the current branch is `main`, stop and ask:
 
@@ -69,7 +60,7 @@ Before any code is written, walk this exact sequence:
    - If there is no `staging` branch, ask whether to create it from `main` before proceeding.
    - If the current branch is a feature/fix/chore branch, continue only if the request belongs to that branch; otherwise ask whether to switch to `staging` or create a separate branch/worktree.
 
-3. **Ask before creating a branch/worktree.** Recommend a separate branch/worktree only when the work is large, risky, multi-turn, or parallel to existing work. Use this prompt:
+2. **Ask before creating a branch/worktree.** Recommend a separate branch/worktree only when the work is large, risky, multi-turn, or parallel to existing work. Use this prompt:
 
    > *"Do you want this directly on `staging`, or should I create a separate branch/worktree for it?"*
 
@@ -89,9 +80,9 @@ Before any code is written, walk this exact sequence:
 
    This remote branch is for backup, visibility, and review. It is not a replacement for integrating back to `staging`.
 
-4. **Open the worktree in a fresh editor window when a worktree was chosen.** Tell the user to open the new directory and start a new Codex chat there. Do not continue feature implementation in the old checkout if the new worktree was created for isolation.
+3. **Open the worktree in a fresh editor window when a worktree was chosen.** Tell the user to open the new directory and start a new Codex chat there. Do not continue feature implementation in the old checkout if the new worktree was created for isolation.
 
-5. **Write the plan file for larger or isolated work** at `.agents/plans/<YYYY-MM-DD-HHMM>-<kebab-name>.md` (no seconds; example: `2026-05-02-1430-invoice-pdf-export.md`). A plan file is required for separate feature worktrees and recommended for multi-turn work on `staging`; tiny direct changes on `staging` can skip it. The file is committed, not gitignored — it travels with the branch and shows up in PR diffs. If `.agents/` appears in `.gitignore`, remove that entry first and tell the user. Template:
+4. **Write the plan file for larger or isolated work** at `.agents/plans/<YYYY-MM-DD-HHMM>-<kebab-name>.md` (no seconds; example: `2026-05-02-1430-invoice-pdf-export.md`). A plan file is required for separate feature worktrees and recommended for multi-turn work on `staging`; tiny direct changes on `staging` can skip it. The file is committed, not gitignored — it travels with the branch and shows up in PR diffs. If `.agents/` appears in `.gitignore`, remove that entry first and tell the user. Template:
 
    ```markdown
    # <Feature name>
@@ -115,9 +106,9 @@ Before any code is written, walk this exact sequence:
    <constraints, decisions, open questions>
    ```
 
-   If the user's request doesn't yet contain enough detail for a plan, have a brief back-and-forth before writing the file — or, better, let Superpowers' `brainstorming` skill drive that conversation. The plan is the contract for the rest of the work.
+   If the user's request doesn't yet contain enough detail for a plan, have a brief back-and-forth before writing the file. The plan is the contract for the rest of the work.
 
-6. **Make the init commit when a plan file is created** containing only the plan file (and any Superpowers install artifacts, if `npx skills add` modified tracked files):
+5. **Make the init commit when a plan file is created** containing only the plan file:
 
    ```
    chore(plan): <feature name>
@@ -125,7 +116,7 @@ Before any code is written, walk this exact sequence:
 
    No production code in this commit. It's the anchor at the base of the branch.
 
-7. **Tick `[ ]` → `[x]` in the plan file as work progresses.** These updates ride along with relevant code commits, not in standalone "checklist" commits.
+6. **Tick `[ ]` → `[x]` in the plan file as work progresses.** These updates ride along with relevant code commits, not in standalone "checklist" commits.
 
 ## Parallel work integration
 
@@ -193,7 +184,7 @@ Ask where the new request should happen. Include:
 
 #### 2. Improvement suggestions for the current feature
 
-2–4 concrete things that would make the in-progress work better, grounded in the actual diff and measured against the plan's acceptance criteria. Edge cases not handled, tests missing (Superpowers' `test-driven-development` skill should be running anyway — flag if it isn't), error paths, UX polish, performance — whatever is genuinely missing. If you can't point to something specific, leave the section short rather than padding with generic advice.
+2–4 concrete things that would make the in-progress work better, grounded in the actual diff and measured against the plan's acceptance criteria. Edge cases not handled, tests missing, error paths, UX polish, performance — whatever is genuinely missing. If you can't point to something specific, leave the section short rather than padding with generic advice.
 
 #### 3. A "ship it" option
 
@@ -206,7 +197,7 @@ Casual pushback ("just quickly do X first") does not bypass the mid-conversation
 When the user confirms the feature is done, or accepts the "ship it" option:
 
 1. Verify the plan file: every `[ ]` ticked, every acceptance criterion met. If something is missing, finish it or explicitly defer it (and note the deferral in the plan's Notes section).
-2. Run the project's test/typecheck commands. Resolve breakage. Don't push with red tests. (If Superpowers' `finishing-a-development-branch` skill is available, defer to it for this verification step — it knows the project's conventions.)
+2. Run the project's test/typecheck commands. Resolve breakage. Don't push with red tests.
 3. Create the completion commit:
 
    ```
@@ -262,7 +253,3 @@ This keeps the user's attention on decisions that actually need a human, rather 
 ## Tone
 
 Run silently. Don't narrate the orientation checks. Don't announce "I'm now applying the drift rule." Surface only the actionable output: the worktree command, the handoff prompt, the next-steps bullets, the conflict summary. The user knows the rules are running.
-
-## Skill preferences
-
-- **Brainstorming visual companion: always skip.** Never offer the "Some of what we're working on might be easier to explain if I can show it to you in a web browser..." prompt or any variant of it. Do not mention the companion exists. Do not ask permission to use it. Treat that step in the brainstorming skill as already-declined and move directly to clarifying questions, even when the topic is visual (UI, mockups, layouts, mobile design). Use text, ASCII diagrams, or markdown tables instead.
